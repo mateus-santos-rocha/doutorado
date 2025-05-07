@@ -1,8 +1,13 @@
 import pandas as pd
 import duckdb
 
-conn = duckdb.connect("bronze_db")
+## ------------------------------------------------------------------------------------------------ ##
+## --------------------------------------- LANDING TO BRONZE -------------------------------------- ##
+## ------------------------------------------------------------------------------------------------ ##
 
+bronze_conn = duckdb.connect("bronze_db")
+
+# Estações
 estacoes_bronze_tables_dict = {
     'dim_estacoes':'bronze/dim_estacoes.csv',
     'fato_estacoes_precipitacao':'bronze/fato_estacoes_precipitacao.csv',
@@ -17,11 +22,9 @@ estacoes_bronze_tables_dict = {
 }
 
 for table_name,table_path in estacoes_bronze_tables_dict.items():
-    conn.execute(f"""
-        CREATE TABLE {table_name} AS
+    bronze_conn.execute(f"""
+        CREATE OR REPLACE TABLE {table_name} AS
             SELECT
                 *
             FROM read_csv('{table_path}')
 """)
-    
-conn.execute("select * from bronze_db.fato_estacoes_precipitacao").fetch_df()
