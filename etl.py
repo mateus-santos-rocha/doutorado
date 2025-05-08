@@ -28,3 +28,43 @@ for table_name,table_path in estacoes_bronze_tables_dict.items():
                 *
             FROM read_csv('{table_path}')
 """)
+    
+
+## ------------------------------------------------------------------------------------------------ ##
+## ---------------------------------------- BRONZE TO PRATA --------------------------------------- ##
+## ------------------------------------------------------------------------------------------------ ##
+
+bronze_conn = duckdb.connect("bronze_db")
+bronze_conn.execute("INSTALL spatial; LOAD spatial")
+prata_conn = duckdb.connect("prata_db")
+
+## -------------------- ##
+## MATRIZ DE DISTÂNCIAS ##
+## -------------------- ##
+prata_matriz_distancias_table_name  = "fato_estacoes_distancia"
+
+df_matriz_distancias = bronze_conn.execute(f"""
+    WITH estacoes AS (
+        SELECT DISTINCT
+            id_estacao
+            ,ST_POINT(longitude,latitude) AS point
+        FROM dim_estacoes)
+    SELECT 
+        estacoes_1.id_estacao as id_estacao_base
+        ,CAST(ST_Distance_Sphere(estacoes_1.point,estacoes_2.point)/1000 AS DECIMAL(8,2))  AS vl_distancia_km
+    FROM estacoes AS estacoes_1
+    CROSS JOIN estacoes AS estacoes_2
+    WHERE estacoes_1.id_estacao < estacoes_2.id_estacao
+""").fetch_df()
+
+prata_conn.execute(f"""
+    CREATE OR REPLACE TABLE {prata_matriz_distancias_table_name} AS
+    SELECT
+        *
+    FROM df_matriz_distancias
+""")
+
+
+
+
+    
