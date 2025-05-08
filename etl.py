@@ -183,6 +183,28 @@ prata_conn.execute(f"""
     FROM prata_fato_estacoes
 """)
 
+## ------------ ##
+## DIM ESTAÇÕES ##
+## ------------ ##
+
+prata_dim_estacoes_table_name = "dim_estacoes"
+
+bronze_dim_estacoes = bronze_conn.execute("SELECT * FROM dim_estacoes").fetch_df()
+
+prata_dim_estacoes = bronze_dim_estacoes.copy()
+
+prata_dim_estacoes['nm_instituicao'] = prata_dim_estacoes['nm_instituicao'].astype(str) \
+    .str.replace('\n','') \
+    .replace(r'\s+', ' ', regex=True)
+
+prata_dim_estacoes['nm_estacao'] = prata_dim_estacoes['nm_estacao'].astype(str).replace(r'\s+', ' ', regex=True)
+    
+prata_conn.execute(f"""
+    CREATE OR REPLACE TABLE {prata_dim_estacoes_table_name} AS 
+    SELECT
+        *
+    FROM prata_dim_estacoes
+    """)
 
 
 
