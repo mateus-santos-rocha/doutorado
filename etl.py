@@ -30,6 +30,10 @@ for table_name,table_path in estacoes_bronze_tables_dict.items():
             FROM read_csv('{table_path}')
 """)
     
+# GPM Final Run
+
+
+    
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## ---------------------------------------- BRONZE TO PRATA --------------------------------------- ##
@@ -38,6 +42,7 @@ for table_name,table_path in estacoes_bronze_tables_dict.items():
 bronze_conn = duckdb.connect("bronze_db")
 bronze_conn.execute("INSTALL spatial; LOAD spatial")
 prata_conn = duckdb.connect("prata_db")
+prata_conn.execute("INSTALL spatial; LOAD spatial")
 
 ## -------------------- ##
 ## MATRIZ DE DISTÂNCIAS ##
@@ -207,6 +212,8 @@ prata_conn.execute(f"""
     """)
 
 
-
+## ------------------------ ##
+## PRODUTOS - GPM FINAL RUN ##
+## ------------------------ ##
 
     

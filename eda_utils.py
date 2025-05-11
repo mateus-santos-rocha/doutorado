@@ -53,7 +53,7 @@ def plotar_estacoes_mapa(df, markersize=1, markercolor='blue',
     plt.xlim(xlim)
     plt.ylim(ylim)
     plt.legend()
-    plt.title('Estações Meteorológicas com Divisas Estaduais')
+    plt.title('Estações Meteorológicas na Região R2')
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
     plt.show()
