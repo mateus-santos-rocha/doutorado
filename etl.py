@@ -1,5 +1,33 @@
 import pandas as pd
 import duckdb
+import os
+from etl_utils import descompactar_e_mover,geotiff_to_dataframe
+import rasterio
+import rasterio.plot
+from rasterio.windows import from_bounds
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+## ------------------------------------------------------------------------------------------------ ##
+## --------------------------------------- UNZIPPING LANDING -------------------------------------- ##
+## ------------------------------------------------------------------------------------------------ ##
+
+# GPM Final Run
+gpm_final_run_zipped_files_path = 'landing/zipados/GPM-final-run'
+gpm_final_run_unzipped_files_path = 'landing/unzipados/GPM-final-run'
+for year_zip in os.listdir(gpm_final_run_zipped_files_path):
+    year = year_zip.split('.zip')[0]
+    descompactar_e_mover(f'{gpm_final_run_zipped_files_path}/{year_zip}',f'{gpm_final_run_unzipped_files_path}/{year}')
+
+# GPM Late Run
+gpm_final_run_zipped_files_path = 'landing/zipados/GPM-late-run'
+gpm_final_run_unzipped_files_path = 'landing/unzipados/GPM-late-run'
+for year_zip in os.listdir(gpm_final_run_zipped_files_path):
+    year = year_zip.split('.zip')[0]
+    descompactar_e_mover(f'{gpm_final_run_zipped_files_path}/{year_zip}',f'{gpm_final_run_unzipped_files_path}/{year}')
+
+
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## --------------------------------------- LANDING TO BRONZE -------------------------------------- ##
@@ -29,11 +57,94 @@ for table_name,table_path in estacoes_bronze_tables_dict.items():
                 *
             FROM read_csv('{table_path}')
 """)
+
+## PRODUTOS - GPM FINAL RUN
+gpm_final_run_table_name = 'fato_produto_gpm_final_run_precipitacao'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+dataframes = []
+base_path = 'landing/unzipados/GPM-final-run'
+years = os.listdir(base_path)
+
+for year in years:
+    print(year)
+    year_path = os.path.join(base_path, year, year)
+    if not os.path.isdir(year_path):
+        continue
+    months = os.listdir(year_path)
     
-# GPM Final Run
+    for month in months:
+        print(f'> {month}')
+        month_path = os.path.join(year_path, month)
+        
+        for filename in os.listdir(month_path):
+            if not filename.endswith('.tif'):
+                continue
+            try:
+                ymd = filename.split('.')[-1][:8]
+                dt = f'{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}'
+                
+                path = os.path.join(month_path, filename)
+                df = geotiff_to_dataframe(path, min_lon, max_lon, min_lat, max_lat, band, 'vl_precipitacao')
+                df['dt_medicao'] = dt
+                dataframes.append(df)
+            except Exception as e:
+                print(f'Erro ao processar {filename}: {e}')
+
+gpm_final_run_df = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {gpm_final_run_table_name} AS
+    SELECT
+        *
+    FROM gpm_final_run_df
+""")
 
 
+## PRODUTOS - GPM LATE RUN
+gpm_late_run_table_name = 'fato_produto_gpm_late_run_precipitacao'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+dataframes = []
+base_path = 'landing/unzipados/GPM-late-run'
+years = os.listdir(base_path)
+
+for year in years:
+    print(year)
+    year_path = os.path.join(base_path, year, year)
+    if not os.path.isdir(year_path):
+        continue
+    months = os.listdir(year_path)
     
+    for month in months:
+        print(f'> {month}')
+        month_path = os.path.join(year_path, month)
+        
+        for filename in os.listdir(month_path):
+            if not filename.endswith('.tif'):
+                continue
+            try:
+                ymd = filename.split('.')[-1][:8]
+                dt = f'{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}'
+                
+                path = os.path.join(month_path, filename)
+                df = geotiff_to_dataframe(path, min_lon, max_lon, min_lat, max_lat, band, 'vl_precipitacao')
+                df['dt_medicao'] = dt
+                dataframes.append(df)
+            except Exception as e:
+                print(f'Erro ao processar {filename}: {e}')
+
+gpm_late_run_df = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {gpm_late_run_table_name} AS
+    SELECT
+        *
+    FROM gpm_late_run_df
+""")
+
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## ---------------------------------------- BRONZE TO PRATA --------------------------------------- ##
@@ -212,8 +323,6 @@ prata_conn.execute(f"""
     """)
 
 
-## ------------------------ ##
-## PRODUTOS - GPM FINAL RUN ##
-## ------------------------ ##
+
 
     

@@ -18,28 +18,23 @@ def plotar_estacoes_mapa(df, markersize=1, markercolor='blue',
     - mostrar_borda: se True, desenha uma borda pontilhada na área (-53, -24) até (-38, -17)
     """
 
-    # Converter para GeoDataFrame
     gdf_estacoes = gpd.GeoDataFrame(
         df,
         geometry=gpd.points_from_xy(df.longitude, df.latitude),
         crs="EPSG:4326"
     )
 
-    # Carregar mapa do Brasil com divisões estaduais
     brasil = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
     estados = gpd.read_file("https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson")
 
-    # Filtrar Brasil e garantir projeção
     brasil = brasil[brasil['name'] == 'Brazil']
     estados = estados.to_crs("EPSG:4326")
 
-    # Plotagem
     fig, ax = plt.subplots(figsize=figsize)
     brasil.plot(ax=ax, color='white', edgecolor='black')
     estados.boundary.plot(ax=ax, color='gray', linewidth=1)
     gdf_estacoes.plot(ax=ax, color=markercolor, markersize=markersize, label='Estações')
 
-    # Borda pontilhada (opcional)
     if mostrar_borda:
         rect = patches.Rectangle(
             xy=(-53, -24), width=15, height=7,  # (lon_min, lat_min), largura, altura
