@@ -160,6 +160,101 @@ CREATE OR REPLACE TABLE {gpm_late_run_table_name} AS
     FROM gpm_late_run_df
 """)
 
+## PRODUTOS - CPC (PRECIPITAÇÃO)
+cpc_precipitacao_table_name = 'fato_produto_cpc_precipitacao'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+cpc_root_folder = os.path.join('landing','unzipados','CPC')
+cpc_precip_folders = [folder for folder in os.listdir(cpc_root_folder) if folder.startswith('precip')]
+cpc_file_paths = []
+dataframes = []
+for folder in cpc_precip_folders:
+    cpc_file_paths+=[os.path.join(cpc_root_folder,folder,file) for file in  os.listdir(os.path.join(cpc_root_folder,folder))]
+
+for file in cpc_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_precipitacao')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+cpc_precipitacao = pd.concat(dataframes,ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {cpc_precipitacao_table_name} AS
+    SELECT
+        *
+    FROM cpc_precipitacao
+""")
+
+## PRODUTOS - CPC (TEMPERATURA MÁXIMA)
+cpc_tmax_table_name = 'fato_produto_cpc_temperatura_maxima'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+cpc_root_folder = os.path.join('landing','unzipados','CPC')
+cpc_precip_folders = [folder for folder in os.listdir(cpc_root_folder) if folder.startswith('tmax')]
+cpc_file_paths = []
+dataframes = []
+for folder in cpc_precip_folders:
+    cpc_file_paths+=[os.path.join(cpc_root_folder,folder,file) for file in  os.listdir(os.path.join(cpc_root_folder,folder))]
+
+for file in cpc_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_temperatura_maxima')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+cpc_tmax = pd.concat(dataframes,ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {cpc_tmax_table_name} AS
+    SELECT
+        *
+    FROM cpc_tmax
+""")
+
+## PRODUTOS - CPC (TEMPERATURA MÍNIMA)
+cpc_tmin_table_name = 'fato_produto_cpc_temperatura_minima'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+cpc_root_folder = os.path.join('landing','unzipados','CPC')
+cpc_precip_folders = [folder for folder in os.listdir(cpc_root_folder) if folder.startswith('tmin')]
+cpc_file_paths = []
+dataframes = []
+for folder in cpc_precip_folders:
+    cpc_file_paths+=[os.path.join(cpc_root_folder,folder,file) for file in  os.listdir(os.path.join(cpc_root_folder,folder))]
+
+for file in cpc_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_temperatura_minima')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+cpc_tmin = pd.concat(dataframes,ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {cpc_tmin_table_name} AS
+    SELECT
+        *
+    FROM cpc_tmin
+""")
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## ---------------------------------------- BRONZE TO PRATA --------------------------------------- ##
@@ -348,9 +443,9 @@ prata_conn.execute(f"""
     SELECT * FROM bronze_gpm_final_run_precipitacao
                    """)
 
-## ------------------------ ##
+## ----------------------- ##
 ## PRODUTOS - GPM LATE RUN ##
-## ------------------------ ##
+## ----------------------- ##
 prata_gpm_late_run_table_name = 'fato_produto_gpm_final_run'
 
 bronze_gpm_late_run_precipitacao = bronze_conn.execute('SELECT * FROM fato_produto_gpm_late_run_precipitacao').fetch_df()
@@ -358,4 +453,5 @@ prata_conn.execute(f"""
     CREATE OR REPLACE TABLE {prata_gpm_late_run_table_name} AS
     SELECT * FROM bronze_gpm_late_run_precipitacao
                    """)
+
     
