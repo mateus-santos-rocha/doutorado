@@ -10,9 +10,13 @@ def descompactar_e_mover(caminho_zip, pasta_destino):
     pasta_temporaria = 'temp_extracao'
     os.makedirs(pasta_temporaria, exist_ok=True)
 
-    # Descompacta o arquivo ZIP
+    # Tenta extrair arquivo por arquivo
     with zipfile.ZipFile(caminho_zip, 'r') as zip_ref:
-        zip_ref.extractall(pasta_temporaria)
+        for membro in zip_ref.namelist():
+            try:
+                zip_ref.extract(membro, pasta_temporaria)
+            except Exception as e:
+                print(f'❌ Erro ao extrair {membro}: {e}')
 
     # Move todos os arquivos da pasta temporária para a pasta de destino
     os.makedirs(pasta_destino, exist_ok=True)
@@ -21,8 +25,11 @@ def descompactar_e_mover(caminho_zip, pasta_destino):
         destino = os.path.join(pasta_destino, nome_arquivo)
         shutil.move(origem, destino)
 
-    # Remove a pasta temporária
-    os.rmdir(pasta_temporaria)
+    # Remove a pasta temporária (se estiver vazia)
+    try:
+        os.rmdir(pasta_temporaria)
+    except OSError:
+        print('⚠️ Pasta temporária não vazia ou erro ao remover. Você pode limpar manualmente.')
 
 def geotiff_to_dataframe(filepath, min_lon, max_lon, min_lat, max_lat, band=1, column_name='valor'):
     """

@@ -27,7 +27,26 @@ for year_zip in os.listdir(gpm_final_run_zipped_files_path):
     year = year_zip.split('.zip')[0]
     descompactar_e_mover(f'{gpm_final_run_zipped_files_path}/{year_zip}',f'{gpm_final_run_unzipped_files_path}/{year}')
 
-
+# CPC
+cpc_zipped_files_path = 'landing/zipados/CPC'
+cpc_unzipped_files_path = 'landing/unzipados/CPC'
+for folder_zip in os.listdir(cpc_zipped_files_path):
+    print(folder_zip)
+    folder = folder_zip.split('.zip')[0]
+    descompactar_e_mover(
+        f'{cpc_zipped_files_path}/{folder_zip}',
+        f'{cpc_unzipped_files_path}/{folder}')
+    
+# POWER
+power_zipped_files_path = 'landing/zipados/POWER'
+power_unzipped_files_path = 'landing/unzipados/POWER'
+for folder_zip in os.listdir(power_zipped_files_path):
+    print(folder_zip)
+    folder = folder_zip.split('.zip')[0]
+    descompactar_e_mover(
+        f'{power_zipped_files_path}/{folder_zip}',
+        f'{power_unzipped_files_path}/{folder}')
+    
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## --------------------------------------- LANDING TO BRONZE -------------------------------------- ##
