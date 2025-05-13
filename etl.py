@@ -101,12 +101,10 @@ for year in years:
             if not filename.endswith('.tif'):
                 continue
             try:
-                ymd = filename.split('.')[-1][:8]
-                dt = f'{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}'
-                
+                day = filename.split('.tif')[0][-2:]
                 path = os.path.join(month_path, filename)
                 df = geotiff_to_dataframe(path, min_lon, max_lon, min_lat, max_lat, band, 'vl_precipitacao')
-                df['dt_medicao'] = dt
+                df['dt_medicao'] = f'{year}-{month}-{day}'
                 dataframes.append(df)
             except Exception as e:
                 print(f'Erro ao processar {filename}: {e}')
@@ -145,12 +143,10 @@ for year in years:
             if not filename.endswith('.tif'):
                 continue
             try:
-                ymd = filename.split('.')[-1][:8]
-                dt = f'{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}'
-                
+                day = filename.split('.tif')[0][-2:]
                 path = os.path.join(month_path, filename)
                 df = geotiff_to_dataframe(path, min_lon, max_lon, min_lat, max_lat, band, 'vl_precipitacao')
-                df['dt_medicao'] = dt
+                df['dt_medicao'] = f'{year}-{month}-{day}'
                 dataframes.append(df)
             except Exception as e:
                 print(f'Erro ao processar {filename}: {e}')
@@ -341,7 +337,25 @@ prata_conn.execute(f"""
     FROM prata_dim_estacoes
     """)
 
+## ------------------------ ##
+## PRODUTOS - GPM FINAL RUN ##
+## ------------------------ ##
+prata_gpm_final_run_table_name = 'fato_produto_gpm_final_run'
 
+bronze_gpm_final_run_precipitacao = bronze_conn.execute('SELECT * FROM fato_produto_gpm_final_run_precipitacao').fetch_df()
+prata_conn.execute(f"""
+    CREATE OR REPLACE TABLE {prata_gpm_final_run_table_name} AS
+    SELECT * FROM bronze_gpm_final_run_precipitacao
+                   """)
 
+## ------------------------ ##
+## PRODUTOS - GPM LATE RUN ##
+## ------------------------ ##
+prata_gpm_late_run_table_name = 'fato_produto_gpm_final_run'
 
+bronze_gpm_late_run_precipitacao = bronze_conn.execute('SELECT * FROM fato_produto_gpm_late_run_precipitacao').fetch_df()
+prata_conn.execute(f"""
+    CREATE OR REPLACE TABLE {prata_gpm_late_run_table_name} AS
+    SELECT * FROM bronze_gpm_late_run_precipitacao
+                   """)
     
