@@ -47,6 +47,16 @@ for folder_zip in os.listdir(power_zipped_files_path):
         f'{power_zipped_files_path}/{folder_zip}',
         f'{power_unzipped_files_path}/{folder}')
     
+# POWER
+chirps_zipped_files_path = 'landing/zipados/chirps'
+chirps_unzipped_files_path = 'landing/unzipados/chirps'
+for folder_zip in os.listdir(chirps_zipped_files_path):
+    print(folder_zip)
+    folder = folder_zip.split('.zip')[0]
+    descompactar_e_mover(
+        f'{chirps_zipped_files_path}/{folder_zip}',
+        f'{chirps_unzipped_files_path}/{folder}')
+    
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## --------------------------------------- LANDING TO BRONZE -------------------------------------- ##
@@ -255,6 +265,42 @@ CREATE OR REPLACE TABLE {cpc_tmin_table_name} AS
         *
     FROM cpc_tmin
 """)
+
+## PRODUTOS - POWER (IRRADIANCIA ALL SKY)
+power_irradiancia_allsky_table_name = 'fato_produto_power_irradiancia_allsky'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing','unzipados','POWER')
+years = os.listdir(power_root_folder)
+power_irradiancia_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder,year,year))
+    for month in months:
+        power_irradiancia_file_paths+=[os.path.join(power_root_folder,year,year,month,file) for file in os.listdir(os.path.join(power_root_folder,year,year,month)) if 'ALLSKY_SFC_SW_DWN' in file]
+
+dataframes = []
+for file in power_irradiancia_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_irradiancia_allsky')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_irradiancia = pd.concat(dataframes,ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_irradiancia_allsky_table_name} AS
+    SELECT
+        *
+    FROM power_irradiancia
+""")
+
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## ---------------------------------------- BRONZE TO PRATA --------------------------------------- ##
