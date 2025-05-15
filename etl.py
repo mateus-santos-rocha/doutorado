@@ -47,7 +47,7 @@ for folder_zip in os.listdir(power_zipped_files_path):
         f'{power_zipped_files_path}/{folder_zip}',
         f'{power_unzipped_files_path}/{folder}')
     
-# POWER
+# CHIRPS
 chirps_zipped_files_path = 'landing/zipados/chirps'
 chirps_unzipped_files_path = 'landing/unzipados/chirps'
 for folder_zip in os.listdir(chirps_zipped_files_path):
@@ -1014,4 +1014,46 @@ prata_conn.execute(f"""
     SELECT * FROM bronze_gpm_late_run_precipitacao
                    """)
 
+## ------------ ##
+## PRODUTOS CPC ##
+## ------------ ##
+
+prata_cpc_df = bronze_conn.execute(
+f"""
+SELECT
+    cpc_precipitacao.dt_medicao
+    ,cpc_precipitacao.lon
+    ,cpc_precipitacao.lat
+    ,cpc_precipitacao.vl_precipitacao
+    ,cpc_temperatura_maxima.vl_temperatura_maxima
+    ,cpc_temperatura_minima.vl_temperatura_minima
+FROM fato_produto_cpc_precipitacao AS cpc_precipitacao
+FULL OUTER JOIN fato_produto_cpc_temperatura_maxima AS cpc_temperatura_maxima
+    ON cpc_precipitacao.dt_medicao = cpc_temperatura_maxima.dt_medicao
+    AND cpc_precipitacao.lon = cpc_temperatura_maxima.lon
+    AND cpc_precipitacao.lat = cpc_temperatura_maxima.lat
+FULL OUTER JOIN fato_produto_cpc_temperatura_minima AS cpc_temperatura_minima
+    ON cpc_precipitacao.dt_medicao = cpc_temperatura_minima.dt_medicao
+    AND cpc_precipitacao.lon = cpc_temperatura_minima.lon
+    AND cpc_precipitacao.lat = cpc_temperatura_minima.lat
+ORDER BY
+    cpc_precipitacao.dt_medicao
+    ,cpc_precipitacao.lat
+    ,cpc_precipitacao.lon
+""").fetch_df()
+
+prata_cpc_df.groupby(['lat','lon','dt_medicao'])[['vl_precipitacao']].count().query('vl_precipitacao>1')
+
+prata_cpc_df.loc[
+    (prata_cpc_df['lat']==-24.75) &
+    (prata_cpc_df['lon']==-53.75) &
+    (prata_cpc_df['dt_medicao']=='2000-01-06')
+]
+
+lat = -24.75
+lon = -53.75
+dt_medicao = '2000-01-06'
+
+bronze_conn.execute(f"select * from fato_produto_cpc_temperatura_maxima where lat = {lat} and lon = {lon} and dt_medicao = '{dt_medicao}'").fetch_df()
+### TEM DUPLICATA NA TABELA DE TEMPERATURA MAXIMA DO CPC, USAR O EXEMPLO ACIMA PARA IDENTIFICAR
     
