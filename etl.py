@@ -1,12 +1,8 @@
 import pandas as pd
 import duckdb
 import os
+import shutil
 from etl_utils import descompactar_e_mover,geotiff_to_dataframe
-import rasterio
-import rasterio.plot
-from rasterio.windows import from_bounds
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 ## ------------------------------------------------------------------------------------------------ ##
@@ -815,6 +811,49 @@ CREATE OR REPLACE TABLE {power_direcao_vento_10m_table_name} AS
         *
     FROM power_direcao_vento_10m
 """)
+
+## PRODUTOS - CHIRPS
+chirps_final_run_table_name = 'fato_produto_chirps_precipitacao'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+dataframes = []
+base_path = 'landing/unzipados/chirps'
+years = os.listdir(base_path)
+
+for year in years:
+    print(year)
+    year_path = os.path.join(base_path, year)
+    if not os.path.isdir(year_path):
+        continue
+    months = os.listdir(year_path)
+    
+    for month in months:
+        print(f'> {month}')
+        month_path = os.path.join(year_path, month)
+        
+        for filename in os.listdir(month_path):
+            if not filename.endswith('.tif'):
+                continue
+            try:
+                day = filename.split('.tif')[0][-2:]
+                path = os.path.join(month_path, filename)
+                df = geotiff_to_dataframe(path, min_lon, max_lon, min_lat, max_lat, band, 'vl_precipitacao')
+                df['dt_medicao'] = f'{year}-{month}-{day}'
+                dataframes.append(df)
+            except Exception as e:
+                print(f'Erro ao processar {filename}: {e}')
+
+chirps_df = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {chirps_final_run_table_name} AS
+    SELECT
+        *
+    FROM chirps_precipitacao
+""")
+
+
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## ---------------------------------------- BRONZE TO PRATA --------------------------------------- ##
