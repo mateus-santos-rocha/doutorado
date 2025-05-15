@@ -301,6 +301,520 @@ CREATE OR REPLACE TABLE {power_irradiancia_allsky_table_name} AS
     FROM power_irradiancia
 """)
 
+## PRODUTOS - POWER (PRECIPITAÇÃO TOTAL CORRIGIDA)
+
+power_precipitacao_table_name = 'fato_produto_power_precipitacao'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_precipitacao_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_precipitacao_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'PRECTOTCORR' in file
+        ]
+
+dataframes = []
+for file in power_precipitacao_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_precipitacao')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_precipitacao = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_precipitacao_table_name} AS
+    SELECT
+        *
+    FROM power_precipitacao
+""")
+
+## PRODUTOS - POWER (PRESSÃO ATMOSFÉRICA NA SUPERFÍCIE)power_pressao_table_name = 'fato_produto_power_pressao'
+power_pressao_table_name = 'fato_produto_power_pressao'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_pressao_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_pressao_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'PS' in file
+        ]
+
+dataframes = []
+for file in power_pressao_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_pressao_nivel_superficie')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_pressao = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_pressao_table_name} AS
+    SELECT
+        *
+    FROM power_pressao
+""")
+
+## PRODUTOS - POWER (TEMPERATURA MÁXIMO A 2 METROS DE ALTURA)
+power_tempmax_table_name = 'fato_produto_power_tempmax'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_tempmax_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_tempmax_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'T2M_MAX' in file
+        ]
+
+dataframes = []
+for file in power_tempmax_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_temperatura_maxima_2m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_tempmax = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_tempmax_table_name} AS
+    SELECT
+        *
+    FROM power_tempmax
+""")
+
+## PRODUTOS - POWER (TEMPERATURA MÍNIMA A 2 METROS DE ALTURA)
+power_tempmin_table_name = 'fato_produto_power_tempmin'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_tempmin_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_tempmin_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'T2M_MIN' in file
+        ]
+
+dataframes = []
+for file in power_tempmin_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_temperatura_minima_2m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_tempmin = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_tempmin_table_name} AS
+    SELECT
+        *
+    FROM power_tempmin
+""")
+
+## PRODUTOS - POWER (TEMPERATURA MÉDIA A 2 METROS DE ALTURA)
+power_tempmedia_table_name = 'fato_produto_power_tempmedia'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_tempmedia_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_tempmedia_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'T2M' in file and 'MAX' not in file and 'MIN' not in file
+        ]
+
+dataframes = []
+for file in power_tempmedia_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_temperatura_media_2m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_tempmedia = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_tempmedia_table_name} AS
+    SELECT
+        *
+    FROM power_tempmedia
+""")
+
+## PRODUTOS - POWER (TEMPERATURA ORVALHO)
+power_temp_orvalho_table_name = 'fato_produto_power_temp_orvalho'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_temp_orvalho_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_temp_orvalho_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'T2MDEW' in file
+        ]
+
+dataframes = []
+for file in power_temp_orvalho_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_temperatura_orvalho_2m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_temp_orvalho = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_temp_orvalho_table_name} AS
+    SELECT
+        *
+    FROM power_temp_orvalho
+""")
+
+## PRODUTOS - POWER (UMIDADE RELATIVA 2M)
+
+power_umidade_2m_table_name = 'fato_produto_power_umidade_2m'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_umidade_2m_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_umidade_2m_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'RH2M' in file
+        ]
+
+dataframes = []
+for file in power_umidade_2m_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_umidade_relativa_2m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_umidade_2m = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_umidade_2m_table_name} AS
+    SELECT
+        *
+    FROM power_umidade_2m
+""")
+
+## PRODUTOS - POWER (VENTO MÉDIO 2M)
+
+power_vento_2m_table_name = 'fato_produto_power_vento_2m'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_vento_2m_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_vento_2m_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'WS2M' in file and 'MAX' not in file
+        ]
+
+dataframes = []
+for file in power_vento_2m_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_vento_medio_2m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_vento_2m = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_vento_2m_table_name} AS
+    SELECT
+        *
+    FROM power_vento_2m
+""")
+
+## PRODUTOS - POWER (VENTO MÁXIMO 2M)
+
+power_vento_2m_max_table_name = 'fato_produto_power_vento_2m_max'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_vento_2m_max_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_vento_2m_max_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'WS2M_MAX' in file
+        ]
+
+dataframes = []
+for file in power_vento_2m_max_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_vento_maximo_2m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_vento_2m_max = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_vento_2m_max_table_name} AS
+    SELECT
+        *
+    FROM power_vento_2m_max
+""")
+
+## PRODUTOS - POWER (VENTO MÉDIO 10M)
+
+power_vento_10m_table_name = 'fato_produto_power_vento_10m'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_vento_10m_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_vento_10m_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'WS10M' in file and 'MAX' not in file
+        ]
+
+dataframes = []
+for file in power_vento_10m_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_vento_10m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_vento_10m = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_vento_10m_table_name} AS
+    SELECT
+        *
+    FROM power_vento_10m
+""")
+
+## PRODUTOS - POWER (VENTO MÁXIMO 10M)
+
+power_vento_10m_max_table_name = 'fato_produto_power_vento_10m_max'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_vento_10m_max_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_vento_10m_max_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'WS10M_MAX' in file
+        ]
+
+dataframes = []
+for file in power_vento_10m_max_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_vento_maximo_10m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_vento_10m_max = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_vento_10m_max_table_name} AS
+    SELECT
+        *
+    FROM power_vento_10m_max
+""")
+
+## PRODUTOS - POWER (DIREÇÃO DO VENTO 2M)
+
+power_direcao_vento_2m_table_name = 'fato_produto_power_direcao_vento_2m'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_direcao_vento_2m_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_direcao_vento_2m_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'WD2M' in file
+        ]
+
+dataframes = []
+for file in power_direcao_vento_2m_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_direcao_vento_2m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_direcao_vento_2m = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_direcao_vento_2m_table_name} AS
+    SELECT
+        *
+    FROM power_direcao_vento_2m
+""")
+
+## PRODUTOS - POWER (DIREÇÃO DO VENTO 10M)
+
+power_direcao_vento_10m_table_name = 'fato_produto_power_direcao_vento_10m'
+min_lon, max_lon = (-54, -37)
+min_lat, max_lat = (-25, -16)
+band = 1
+power_root_folder = os.path.join('landing', 'unzipados', 'POWER')
+years = os.listdir(power_root_folder)
+power_direcao_vento_10m_file_paths = []
+
+for year in years:
+    months = os.listdir(os.path.join(power_root_folder, year, year))
+    for month in months:
+        power_direcao_vento_10m_file_paths += [
+            os.path.join(power_root_folder, year, year, month, file)
+            for file in os.listdir(os.path.join(power_root_folder, year, year, month))
+            if 'WD10M' in file
+        ]
+
+dataframes = []
+for file in power_direcao_vento_10m_file_paths:
+    try:
+        day = file[-6:-4]
+        month = file[-8:-6]
+        year = file[-12:-8]
+        df = geotiff_to_dataframe(file, min_lon, max_lon, min_lat, max_lat, band, 'vl_direcao_vento_10m')
+        df['dt_medicao'] = f'{year}-{month}-{day}'
+        dataframes.append(df)
+    except Exception as e:
+        print(f'Erro ao processar {file}: {e}')
+
+power_direcao_vento_10m = pd.concat(dataframes, ignore_index=True)
+
+bronze_conn.execute(f"""
+CREATE OR REPLACE TABLE {power_direcao_vento_10m_table_name} AS
+    SELECT
+        *
+    FROM power_direcao_vento_10m
+""")
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## ---------------------------------------- BRONZE TO PRATA --------------------------------------- ##
