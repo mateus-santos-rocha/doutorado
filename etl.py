@@ -850,10 +850,8 @@ bronze_conn.execute(f"""
 CREATE OR REPLACE TABLE {chirps_final_run_table_name} AS
     SELECT
         *
-    FROM chirps_precipitacao
+    FROM chirps_df
 """)
-
-
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## ---------------------------------------- BRONZE TO PRATA --------------------------------------- ##
