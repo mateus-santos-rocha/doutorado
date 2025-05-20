@@ -210,6 +210,7 @@ dataframes = []
 for folder in cpc_precip_folders:
     cpc_file_paths+=[os.path.join(cpc_root_folder,folder,file) for file in  os.listdir(os.path.join(cpc_root_folder,folder))]
 
+
 for file in cpc_file_paths:
     try:
         day = file[-6:-4]
@@ -1054,6 +1055,7 @@ prata_conn.execute(f"""
 ## ------------ ##
 ## PRODUTOS CPC ##
 ## ------------ ##
+prata_cpc_table_name = 'fato_produto_cpc'
 
 prata_cpc_df = bronze_conn.execute(
 f"""
@@ -1079,18 +1081,9 @@ ORDER BY
     ,cpc_precipitacao.lon
 """).fetch_df()
 
-prata_cpc_df.groupby(['lat','lon','dt_medicao'])[['vl_precipitacao']].count().query('vl_precipitacao>1')
-
-prata_cpc_df.loc[
-    (prata_cpc_df['lat']==-24.75) &
-    (prata_cpc_df['lon']==-53.75) &
-    (prata_cpc_df['dt_medicao']=='2000-01-06')
-]
-
-lat = -24.75
-lon = -53.75
-dt_medicao = '2000-01-06'
-
-bronze_conn.execute(f"select * from fato_produto_cpc_temperatura_maxima where lat = {lat} and lon = {lon} and dt_medicao = '{dt_medicao}'").fetch_df()
-### TEM DUPLICATA NA TABELA DE TEMPERATURA MAXIMA DO CPC, USAR O EXEMPLO ACIMA PARA IDENTIFICAR
-    
+prata_conn.execute(f"""
+    CREATE OR REPLACE TABLE {prata_cpc_table_name} AS 
+    SELECT
+        *
+    FROM prata_cpc_df
+    """)
