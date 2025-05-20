@@ -470,7 +470,7 @@ for year in years:
         power_tempmedia_file_paths += [
             os.path.join(power_root_folder, year, year, month, file)
             for file in os.listdir(os.path.join(power_root_folder, year, year, month))
-            if 'T2M' in file and 'MAX' not in file and 'MIN' not in file
+            if 'T2M' in file and 'MAX' not in file and 'MIN' not in file and 'DEW' not in file
         ]
 
 dataframes = []
@@ -1086,4 +1086,94 @@ prata_conn.execute(f"""
     SELECT
         *
     FROM prata_cpc_df
+    """)
+
+## -------------- ##
+## PRODUTOS POWER ##
+## -------------- ##
+
+prata_power_table_name = 'fato_produto_power'
+
+prata_power_df = bronze_conn.execute(
+f"""
+SELECT
+    power_precipitacao.dt_medicao
+    ,power_precipitacao.lat
+    ,power_precipitacao.lon
+    ,power_precipitacao.vl_precipitacao
+    ,power_tempmax.vl_temperatura_maxima_2m
+    ,power_tempmedia.vl_temperatura_media_2m
+    ,power_tempmin.vl_temperatura_minima_2m
+    ,power_umidaderelativa.vl_umidade_relativa_2m
+    ,power_pressao.vl_pressao_nivel_superficie
+    ,power_irradiancia.vl_irradiancia_allsky
+    ,power_direcao_vento_10m.vl_direcao_vento_10m
+    ,power_direcao_vento_2m.vl_direcao_vento_2m
+    ,power_temporvalho.vl_temperatura_orvalho_2m
+    ,power_vento_10m.vl_vento_10m
+    ,power_vento_2m.vl_vento_medio_2m
+    ,power_vento_2m_max.vl_vento_maximo_2m
+    ,power_vento_10m_max.vl_vento_maximo_10m
+FROM fato_produto_power_precipitacao AS power_precipitacao
+FULL OUTER JOIN fato_produto_power_tempmax AS power_tempmax 
+    ON power_precipitacao.dt_medicao = power_tempmax.dt_medicao
+    AND power_precipitacao.lat = power_tempmax.lat
+    AND power_precipitacao.lon = power_tempmax.lon
+FULL OUTER JOIN fato_produto_power_tempmedia AS power_tempmedia
+    ON power_precipitacao.dt_medicao = power_tempmedia.dt_medicao
+    AND power_precipitacao.lat = power_tempmedia.lat
+    AND power_precipitacao.lon = power_tempmedia.lon
+FULL OUTER JOIN fato_produto_power_tempmin AS power_tempmin
+    ON power_precipitacao.dt_medicao = power_tempmin.dt_medicao
+    AND power_precipitacao.lat = power_tempmin.lat
+    AND power_precipitacao.lon = power_tempmin.lon
+FULL OUTER JOIN fato_produto_power_umidade_2m AS power_umidaderelativa
+    ON power_precipitacao.dt_medicao = power_umidaderelativa.dt_medicao
+    AND power_precipitacao.lat = power_umidaderelativa.lat
+    AND power_precipitacao.lon = power_umidaderelativa.lon
+FULL OUTER JOIN fato_produto_power_pressao AS power_pressao
+    ON power_precipitacao.dt_medicao = power_pressao.dt_medicao
+    AND power_precipitacao.lat = power_pressao.lat
+    AND power_precipitacao.lon = power_pressao.lon
+FULL OUTER JOIN fato_produto_power_irradiancia_allsky AS power_irradiancia
+    ON power_precipitacao.dt_medicao = power_irradiancia.dt_medicao
+    AND power_precipitacao.lat = power_irradiancia.lat
+    AND power_precipitacao.lon = power_irradiancia.lon
+FULL OUTER JOIN fato_produto_power_direcao_vento_10m AS power_direcao_vento_10m
+    ON power_precipitacao.dt_medicao = power_direcao_vento_10m.dt_medicao
+    AND power_precipitacao.lat = power_direcao_vento_10m.lat
+    AND power_precipitacao.lon = power_direcao_vento_10m.lon
+FULL OUTER JOIN fato_produto_power_direcao_vento_2m AS power_direcao_vento_2m
+    ON power_precipitacao.dt_medicao = power_direcao_vento_2m.dt_medicao
+    AND power_precipitacao.lat = power_direcao_vento_2m.lat
+    AND power_precipitacao.lon = power_direcao_vento_2m.lon
+FULL OUTER JOIN fato_produto_power_temp_orvalho AS power_temporvalho
+    ON power_precipitacao.dt_medicao = power_temporvalho.dt_medicao
+    AND power_precipitacao.lat = power_temporvalho.lat
+    AND power_precipitacao.lon = power_temporvalho.lon
+FULL OUTER JOIN fato_produto_power_vento_10m AS power_vento_10m
+    ON power_precipitacao.dt_medicao = power_vento_10m.dt_medicao
+    AND power_precipitacao.lat = power_vento_10m.lat
+    AND power_precipitacao.lon = power_vento_10m.lon
+FULL OUTER JOIN fato_produto_power_vento_2m AS power_vento_2m
+    ON power_precipitacao.dt_medicao = power_vento_2m.dt_medicao
+    AND power_precipitacao.lat = power_vento_2m.lat
+    AND power_precipitacao.lon = power_vento_2m.lon
+FULL OUTER JOIN fato_produto_power_vento_2m_max AS power_vento_2m_max
+    ON power_precipitacao.dt_medicao = power_vento_2m_max.dt_medicao
+    AND power_precipitacao.lat = power_vento_2m_max.lat
+    AND power_precipitacao.lon = power_vento_2m_max.lon
+FULL OUTER JOIN fato_produto_power_vento_10m_max AS power_vento_10m_max
+    ON power_precipitacao.dt_medicao = power_vento_10m_max.dt_medicao
+    AND power_precipitacao.lat = power_vento_10m_max.lat
+    AND power_precipitacao.lon = power_vento_10m_max.lon
+"""
+).fetch_df()
+
+
+prata_conn.execute(f"""
+    CREATE OR REPLACE TABLE {prata_power_table_name} AS 
+    SELECT
+        *
+    FROM prata_power_df
     """)
