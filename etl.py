@@ -1044,7 +1044,7 @@ prata_conn.execute(f"""
 ## ----------------------- ##
 ## PRODUTOS - GPM LATE RUN ##
 ## ----------------------- ##
-prata_gpm_late_run_table_name = 'fato_produto_gpm_final_run'
+prata_gpm_late_run_table_name = 'fato_produto_gpm_late_run'
 
 bronze_gpm_late_run_precipitacao = bronze_conn.execute('SELECT * FROM fato_produto_gpm_late_run_precipitacao').fetch_df()
 prata_conn.execute(f"""
@@ -1177,3 +1177,28 @@ prata_conn.execute(f"""
         *
     FROM prata_power_df
     """)
+
+## --------------- ##
+## PRODUTOS CHIRPS ##
+## --------------- ##
+
+prata_chirps_table_name = 'fato_produto_chirps'
+
+prata_chirps_df = bronze_conn.execute(
+f"""
+SELECT
+    chirps.dt_medicao
+    ,chirps.lat
+    ,chirps.lon
+    ,chirps.vl_precipitacao
+FROM fato_produto_chirps_precipitacao AS chirps
+""").fetch_df()
+
+prata_conn.execute(f"""
+    CREATE OR REPLACE TABLE {prata_chirps_table_name} AS 
+    SELECT
+        *
+    FROM prata_chirps_df
+    """)
+
+prata_conn.execute("show tables").fetch_df()
