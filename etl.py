@@ -1,8 +1,9 @@
 import pandas as pd
+import numpy as np
 import duckdb
 import os
 import shutil
-from etl_utils import descompactar_e_mover,geotiff_to_dataframe
+from etl_utils import descompactar_e_mover,geotiff_to_dataframe,encontrar_coordenadas_mais_proximas
 
 
 ## ------------------------------------------------------------------------------------------------ ##
@@ -1208,8 +1209,36 @@ prata_conn.execute(f"""
     FROM prata_chirps_df
     """)
 
+## ------------------------------------------------------------------------------------------------ ##
+## ---------------------------------------- PRATA TO GOLD ----------------------------------------- ##
+## ------------------------------------------------------------------------------------------------ ##
 
+## ------------ ##
+## DIM ESTAÇÕES ##
+## ------------ ##
 
+ouro_dim_estacoes_table_name = 'dim_estacoes'
+prata_conn = duckdb.connect("prata_db")
+prata_conn.execute("INSTALL spatial; LOAD spatial")
+ouro_conn = duckdb.connect("ouro_db")
+ouro_conn.execute("INSTALL spatial; LOAD spatial")
 
+produtos = ['chirps','cpc','power','gpm_final_run','gpm_late_run']
 
+possible_lon = {produto: [round(v,3) for v in prata_conn.execute(f"SELECT DISTINCT lon FROM fato_produto_{produto} ORDER BY lon").fetch_df()['lon'].tolist()] for produto in produtos}
+possible_lat = {produto: [round(v,3) for v in prata_conn.execute(f"SELECT DISTINCT lat FROM fato_produto_{produto} ORDER BY lon").fetch_df()['lat'].tolist()] for produto in produtos}
 
+prata_dim_estacoes_df = prata_conn.execute('select * from dim_estacoes').fetch_df()
+
+fato_estacoes_latlon_produtos_df = encontrar_coordenadas_mais_proximas(
+    prata_dim_estacoes_df, 
+    produtos, 
+    possible_lat, 
+    possible_lon
+)
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_dim_estacoes_table_name} AS
+SELECT * FROM fato_estacoes_latlon_produtos_df
+""")
