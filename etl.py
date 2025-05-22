@@ -149,7 +149,7 @@ for year in years:
             if not filename.endswith('.tif'):
                 continue
             try:
-                day = filename.split('.tif')[0][-2:]
+                day = filename.split('.tif')[0][-33:-31]
                 path = os.path.join(month_path, filename)
                 df = geotiff_to_dataframe(path, min_lon, max_lon, min_lat, max_lat, band, 'vl_precipitacao')
                 df['dt_medicao'] = f'{year}-{month}-{day}'
@@ -1047,9 +1047,16 @@ prata_conn.execute(f"""
 prata_gpm_late_run_table_name = 'fato_produto_gpm_late_run'
 
 bronze_gpm_late_run_precipitacao = bronze_conn.execute('SELECT * FROM fato_produto_gpm_late_run_precipitacao').fetch_df()
-prata_conn.execute(f"""
-    CREATE OR REPLACE TABLE {prata_gpm_late_run_table_name} AS
-    SELECT * FROM bronze_gpm_late_run_precipitacao
+
+prata_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {prata_gpm_late_run_table_name} AS
+SELECT 
+    dt_medicao
+    ,CAST(lon AS DECIMAL(4,2)) AS lon
+    ,CAST(lat AS DECIMAL(4,2)) AS lat
+    ,vl_precipitacao
+FROM bronze_gpm_late_run_precipitacao
                    """)
 
 ## ------------ ##
@@ -1201,4 +1208,8 @@ prata_conn.execute(f"""
     FROM prata_chirps_df
     """)
 
-prata_conn.execute("show tables").fetch_df()
+
+
+
+
+
