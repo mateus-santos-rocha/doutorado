@@ -5,6 +5,8 @@ import rasterio
 from rasterio.windows import from_bounds
 import pandas as pd
 import numpy as np
+from tqdm.notebook import tqdm
+
 
 def descompactar_e_mover(caminho_zip, pasta_destino):
     pasta_temporaria = 'temp_extracao'
@@ -124,3 +126,22 @@ def encontrar_coordenadas_mais_proximas(df_estacoes, produtos, possible_lat, pos
             df_resultado.loc[index, lon_produto_col] = melhor_lon_produto
             
     return df_resultado
+
+def calcular_intersecoes_estacoes_vizinhas(id_estacao_base,fato_estacoes,datas_por_estacao):
+    estacoes = set(fato_estacoes['id_estacao'])
+    intersecoes_dict = {}
+    intersecoes_dict[id_estacao_base] = {}
+    datas_estacao_base = datas_por_estacao[id_estacao_base] # Pega o set pré-calculado
+
+    # Evita ZeroDivisionError se a estação base não tiver dados
+    if not datas_estacao_base:
+        for id_estacao_candidata in list(estacoes.difference({id_estacao_base})):
+            intersecoes_dict[id_estacao_candidata] = 0.0
+        return None # Pula para a próxima estação base
+
+    for id_estacao_candidata in tqdm(list(estacoes.difference({id_estacao_base})), desc=f"Calculando para {id_estacao_base}", leave=False):
+        datas_estacao_candidata = datas_por_estacao[id_estacao_candidata] # Pega o set pré-calculado
+
+        pct_intersecao_base_candidata = len(datas_estacao_base.intersection(datas_estacao_candidata)) * 100 / len(datas_estacao_base)
+        intersecoes_dict[id_estacao_candidata] = pct_intersecao_base_candidata
+    return intersecoes_dict

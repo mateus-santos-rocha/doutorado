@@ -3,8 +3,8 @@ import numpy as np
 import duckdb
 import os
 import shutil
-from etl_utils import descompactar_e_mover,geotiff_to_dataframe,encontrar_coordenadas_mais_proximas
-
+from etl_utils import descompactar_e_mover,geotiff_to_dataframe,encontrar_coordenadas_mais_proximas,calcular_intersecoes_estacoes_vizinhas
+from tqdm.notebook import tqdm
 
 ## ------------------------------------------------------------------------------------------------ ##
 ## --------------------------------------- UNZIPPING LANDING -------------------------------------- ##
@@ -878,6 +878,7 @@ df_matriz_distancias = bronze_conn.execute(f"""
         FROM dim_estacoes)
     SELECT 
         estacoes_1.id_estacao as id_estacao_base
+        ,estacoes_2.id_estacao as id_estacao_candidata
         ,CAST(ST_Distance_Sphere(estacoes_1.point,estacoes_2.point)/1000 AS DECIMAL(8,2))  AS vl_distancia_km
     FROM estacoes AS estacoes_1
     CROSS JOIN estacoes AS estacoes_2
@@ -889,6 +890,43 @@ prata_conn.execute(f"""
     SELECT
         *
     FROM df_matriz_distancias
+""")
+
+## --------------------- ##
+## MATRIZ DE INTERSEÇÕES ##
+## --------------------- ##
+
+prata_matriz_distancias_table_name  = "fato_estacoes_intersecao"
+
+fato_estacoes = prata_conn.execute("select id_estacao,dt_medicao,vl_precipitacao from fato_estacoes").fetch_df()
+fato_estacoes['dt_medicao'] = fato_estacoes['dt_medicao'].astype(str)
+
+datas_por_estacao = {}
+print("Pré-calculando datas por estação...")
+for id_estacao in tqdm(set(fato_estacoes['id_estacao']), desc="Preparando dados de datas"):
+    datas_por_estacao[id_estacao] = set(fato_estacoes.loc[fato_estacoes['id_estacao'] == id_estacao, 'dt_medicao'])
+print("Pré-cálculo concluído.")
+
+print("Iniciando o cálculo de interseções...")
+intersecoes_dict = {}
+for id_estacao_base in tqdm(fato_estacoes['id_estacao'].unique(), desc=f"Calculando interseções", leave=False):
+    intersecoes_dict[id_estacao_base] = calcular_intersecoes_estacoes_vizinhas(id_estacao_base,fato_estacoes,datas_por_estacao)
+
+for id_estacao_base in intersecoes_dict.keys():
+    del intersecoes_dict[id_estacao_base][id_estacao_base]
+
+df_matriz_intersecoes = pd.DataFrame.from_dict(intersecoes_dict,orient='index').stack().reset_index() \
+    .rename(columns = {
+        'level_0':'id_estacao_base',
+        'level_1':'id_estacao_candidata',
+        0:'pct_intersecao_precipitacao'
+    })
+
+prata_conn.execute(f"""
+    CREATE OR REPLACE TABLE {prata_matriz_distancias_table_name} AS
+    SELECT
+        *
+    FROM df_matriz_intersecoes
 """)
 
 ## ------------- ##
@@ -1213,15 +1251,18 @@ prata_conn.execute(f"""
 ## ---------------------------------------- PRATA TO GOLD ----------------------------------------- ##
 ## ------------------------------------------------------------------------------------------------ ##
 
+prata_conn = duckdb.connect("prata_db")
+prata_conn.execute("INSTALL spatial; LOAD spatial")
+ouro_conn = duckdb.connect("ouro_db")
+ouro_conn.execute("INSTALL spatial; LOAD spatial")
+
+
 ## ------------ ##
 ## DIM ESTAÇÕES ##
 ## ------------ ##
 
 ouro_dim_estacoes_table_name = 'dim_estacoes'
-prata_conn = duckdb.connect("prata_db")
-prata_conn.execute("INSTALL spatial; LOAD spatial")
-ouro_conn = duckdb.connect("ouro_db")
-ouro_conn.execute("INSTALL spatial; LOAD spatial")
+
 
 produtos = ['chirps','cpc','power','gpm_final_run','gpm_late_run']
 
@@ -1242,3 +1283,7 @@ f"""
 CREATE OR REPLACE TABLE {ouro_dim_estacoes_table_name} AS
 SELECT * FROM fato_estacoes_latlon_produtos_df
 """)
+
+## ------------ ##
+## DIM ESTAÇÕES ##
+## ------------ ##
