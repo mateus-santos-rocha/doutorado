@@ -2,5 +2,6 @@ bronze
 bronze_db
 prata_db
 ouro_db
+ouro_db.wal
 __pycache__
 landing
