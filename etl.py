@@ -882,7 +882,7 @@ df_matriz_distancias = bronze_conn.execute(f"""
         ,CAST(ST_Distance_Sphere(estacoes_1.point,estacoes_2.point)/1000 AS DECIMAL(8,2))  AS vl_distancia_km
     FROM estacoes AS estacoes_1
     CROSS JOIN estacoes AS estacoes_2
-    WHERE estacoes_1.id_estacao < estacoes_2.id_estacao
+    WHERE estacoes_1.id_estacao <> estacoes_2.id_estacao
 """).fetch_df()
 
 prata_conn.execute(f"""
@@ -1256,6 +1256,8 @@ prata_conn.execute("INSTALL spatial; LOAD spatial")
 ouro_conn = duckdb.connect("ouro_db")
 ouro_conn.execute("INSTALL spatial; LOAD spatial")
 
+ouro_conn.execute('show tables').fetch_df()
+
 
 ## ------------ ##
 ## DIM ESTAÇÕES ##
@@ -1263,6 +1265,24 @@ ouro_conn.execute("INSTALL spatial; LOAD spatial")
 
 ouro_dim_estacoes_table_name = 'dim_estacoes'
 
+estacoes_com_medicao_de_precipitacao = prata_conn.execute('select id_estacao from fato_estacoes group by id_estacao having count(vl_precipitacao)>0').fetch_df()['id_estacao'].tolist()
+
+estacoes_com_medicao_de_precipitacao_str = ','.join([str(id_estacao) for id_estacao in estacoes_com_medicao_de_precipitacao])
+
+ouro_dim_estacoes_df = prata_conn.execute(f'select * from dim_estacoes where id_estacao in ({estacoes_com_medicao_de_precipitacao_str})').fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_dim_estacoes_table_name} AS
+SELECT * FROM ouro_dim_estacoes_df
+""")
+
+
+## ----------------------------- ##
+## FATO ESTAÇÕES LATLON PRODUTOS ##
+## ----------------------------- ##
+
+ouro_fato_estacoes_latlon_table_name = 'fato_estacoes_latlon_produtos_df'
 
 produtos = ['chirps','cpc','power','gpm_final_run','gpm_late_run']
 
@@ -1280,10 +1300,8 @@ fato_estacoes_latlon_produtos_df = encontrar_coordenadas_mais_proximas(
 
 ouro_conn.execute(
 f"""
-CREATE OR REPLACE TABLE {ouro_dim_estacoes_table_name} AS
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_latlon_table_name} AS
 SELECT * FROM fato_estacoes_latlon_produtos_df
 """)
 
-## ------------ ##
-## DIM ESTAÇÕES ##
-## ------------ ##
+ouro_conn.execute('show tables').fetch_df()
