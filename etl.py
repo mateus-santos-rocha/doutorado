@@ -1256,9 +1256,6 @@ prata_conn.execute("INSTALL spatial; LOAD spatial")
 ouro_conn = duckdb.connect("ouro_db")
 ouro_conn.execute("INSTALL spatial; LOAD spatial")
 
-ouro_conn.execute('show tables').fetch_df()
-
-
 ## ------------ ##
 ## DIM ESTAÇÕES ##
 ## ------------ ##
@@ -1289,10 +1286,10 @@ produtos = ['chirps','cpc','power','gpm_final_run','gpm_late_run']
 possible_lon = {produto: [round(v,3) for v in prata_conn.execute(f"SELECT DISTINCT lon FROM fato_produto_{produto} ORDER BY lon").fetch_df()['lon'].tolist()] for produto in produtos}
 possible_lat = {produto: [round(v,3) for v in prata_conn.execute(f"SELECT DISTINCT lat FROM fato_produto_{produto} ORDER BY lon").fetch_df()['lat'].tolist()] for produto in produtos}
 
-prata_dim_estacoes_df = prata_conn.execute('select * from dim_estacoes').fetch_df()
+ouro_dim_estacoes_df = prata_conn.execute('select * from dim_estacoes').fetch_df()
 
 fato_estacoes_latlon_produtos_df = encontrar_coordenadas_mais_proximas(
-    prata_dim_estacoes_df, 
+    ouro_dim_estacoes_df, 
     produtos, 
     possible_lat, 
     possible_lon
@@ -1304,4 +1301,70 @@ CREATE OR REPLACE TABLE {ouro_fato_estacoes_latlon_table_name} AS
 SELECT * FROM fato_estacoes_latlon_produtos_df
 """)
 
-ouro_conn.execute('show tables').fetch_df()
+
+## -------------------- ##
+## MATRIZ DE DISTÂNCIAS ##
+## -------------------- ##
+
+ouro_matriz_distancias_table_name  = "fato_estacoes_distancia"
+
+estacoes_list = ouro_conn.execute("SELECT DISTINCT id_estacao FROM dim_estacoes").fetch_df()['id_estacao'].tolist()
+
+estacoes_list_str = ','.join([str(id_estacao) for id_estacao in estacoes_list])
+
+ouro_matriz_distancias = prata_conn.execute(f"""
+    SELECT * FROM fato_estacoes_distancia
+    WHERE id_estacao_base IN ({estacoes_list_str})
+    AND id_estacao_candidata IN ({estacoes_list_str})
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_matriz_distancias_table_name} AS
+SELECT * FROM ouro_matriz_distancias
+""")
+
+## --------------------- ##
+## MATRIZ DE INTERSEÇÕES ##
+## --------------------- ##
+
+ouro_matriz_distancias_table_name  = "fato_estacoes_distancia"
+
+estacoes_list = ouro_conn.execute("SELECT DISTINCT id_estacao FROM dim_estacoes").fetch_df()['id_estacao'].tolist()
+
+estacoes_list_str = ','.join([str(id_estacao) for id_estacao in estacoes_list])
+
+ouro_matriz_distancias = prata_conn.execute(f"""
+    SELECT * FROM fato_estacoes_distancia
+    WHERE id_estacao_base IN ({estacoes_list_str})
+    AND id_estacao_candidata IN ({estacoes_list_str})
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_matriz_distancias_table_name} AS
+SELECT * FROM ouro_matriz_distancias
+""")
+
+
+## 
+## --------------------- ##
+## MATRIZ DE INTERSEÇÕES ##
+## --------------------- ##
+
+ouro_matriz_intersecao_table_name  = "fato_estacoes_intersecao"
+
+estacoes_list = ouro_conn.execute("SELECT DISTINCT id_estacao FROM dim_estacoes").fetch_df()['id_estacao'].tolist()
+
+ouro_matriz_intersecao = prata_conn.execute(f"""
+    SELECT * FROM fato_estacoes_intersecao
+    WHERE id_estacao_base IN ({estacoes_list_str})
+    AND id_estacao_candidata IN ({estacoes_list_str})
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_matriz_intersecao_table_name} AS
+SELECT * FROM ouro_matriz_intersecao
+""")
+
