@@ -1,16 +1,15 @@
-import pandas as pd
-import duckdb
 from pulp import *
 from tqdm.notebook import tqdm
-import math
 from collections import Counter
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 from itertools import product
-from concurrent.futures import ProcessPoolExecutor, as_completed
 import os
 import json
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def get_distancias(conn, id_estacao_base):
     rows = conn.execute(
@@ -153,7 +152,7 @@ def selecionar_estacoes_candidatas(
         id_estacao_base: [
             id_estacao_candidata
             for i, id_estacao_candidata in enumerate(sorted([eid for eid in estacoes if eid != id_estacao_base]))
-            if i in final_selected_indices[id_estacao_base].keys()
+            if i in final_selected_indices[id_estacao_base]
         ]
         for id_estacao_base in estacoes
     }
@@ -247,15 +246,17 @@ def testar_multiplos_parametros_gp(
         resultado = executar_teste(i + 1, params, estacoes,distancias_dict,intersecoes_dict)
         print(resultado)
 
-    
-
-
-def gerar_relatorio_vizinhas(id_estacoes_vizinhas: dict[str, list[str | int]], limite_minimo=3):
+def gerar_relatorio_vizinhas(
+    id_estacoes_vizinhas: dict[str, list[str | int]],
+    df_distancias: pd.DataFrame,
+    limite_minimo: int = 3
+):
     """
     Gera um panorama geral das estações vizinhas selecionadas para cada estação base.
 
     Args:
         id_estacoes_vizinhas (dict): dicionário com chave = id_estacao_base, valor = lista de vizinhas.
+        df_distancias (pd.DataFrame): dataframe com colunas id_estacao_base, id_estacao_candidata, vl_distancia_km.
         limite_minimo (int): valor mínimo de vizinhas para destacar estações com poucas vizinhas.
 
     Returns:
@@ -267,14 +268,39 @@ def gerar_relatorio_vizinhas(id_estacoes_vizinhas: dict[str, list[str | int]], l
     max_vizinhas = max(len(v) for v in id_estacoes_vizinhas.values())
     min_vizinhas = min(len(v) for v in id_estacoes_vizinhas.values())
 
-    # Estações base com menos de X vizinhas
     estacoes_com_poucas_vizinhas = [
         est for est, viz in id_estacoes_vizinhas.items() if len(viz) < limite_minimo
     ]
 
-    # Frequência com que cada estação vizinha foi escolhida
     todas_vizinhas = [v for viz_list in id_estacoes_vizinhas.values() for v in viz_list]
     frequencia_vizinhas = Counter(todas_vizinhas)
+
+    # 🔥 Parte otimizada: criar DataFrame de pares e fazer merge
+    df_vizinhas = pd.DataFrame([
+        {"id_estacao_base": base, "id_estacao_candidata": candidata}
+        for base, candidatas in id_estacoes_vizinhas.items()
+        for candidata in candidatas
+    ])
+
+    # Garante que os tipos são compatíveis para o merge
+    df_vizinhas["id_estacao_base"] = df_vizinhas["id_estacao_base"].astype(str)
+    df_vizinhas["id_estacao_candidata"] = df_vizinhas["id_estacao_candidata"].astype(str)
+    df_distancias["id_estacao_base"] = df_distancias["id_estacao_base"].astype(str)
+    df_distancias["id_estacao_candidata"] = df_distancias["id_estacao_candidata"].astype(str)
+
+    df_merged = df_vizinhas.merge(
+        df_distancias,
+        on=["id_estacao_base", "id_estacao_candidata"],
+        how="left"
+)
+
+    if not df_merged.empty and df_merged["vl_distancia_km"].notna().any():
+        distancia_max = df_merged["vl_distancia_km"].max()
+        media_por_base = df_merged.groupby("id_estacao_base")["vl_distancia_km"].mean()
+        media_das_medias = media_por_base.mean()
+    else:
+        distancia_max = None
+        media_das_medias = None
 
     print("📊 RELATÓRIO GERAL DAS ESTAÇÕES VIZINHAS")
     print("=" * 50)
@@ -291,7 +317,111 @@ def gerar_relatorio_vizinhas(id_estacoes_vizinhas: dict[str, list[str | int]], l
     print("Top 10 estações mais frequentemente escolhidas como vizinhas:")
     for estacao, freq in frequencia_vizinhas.most_common(10):
         print(f"  Estação {estacao}: {freq} vezes")
+    print("-" * 50)
+    print("📏 DISTÂNCIAS ENTRE ESTAÇÕES")
+    if distancia_max is not None:
+        print(f"Maior distância entre base e vizinha: {distancia_max:.2f} km")
+        print(f"Média das médias de distância por estação base: {media_das_medias:.2f} km")
+    else:
+        print("Não foi possível calcular distâncias (dados ausentes ou incompatíveis).")
     print("=" * 50)
+
+
+def comparar_tentativas_vizinhas(
+    tentativas: list[dict],
+    df_distancias: pd.DataFrame = None,
+    limite_minimo: int = 3,  # ainda usado nos plots
+    plotar: bool = True
+) -> pd.DataFrame:
+    """
+    Resume e compara o desempenho de várias tentativas de seleção de estações vizinhas.
+
+    Args:
+        tentativas (list): Lista de dicionários, cada um com 'id_estacoes_vizinhas'.
+        df_distancias (pd.DataFrame): DataFrame com colunas id_estacao_base, id_estacao_candidata, vl_distancia_km.
+        limite_minimo (int): Quantidade mínima de vizinhas por base para destaque nos plots.
+        plotar (bool): Se True, plota gráficos de comparação.
+
+    Returns:
+        pd.DataFrame: Tabela com métricas de cada tentativa.
+    """
+    resumo = []
+
+    for i, tentativa in enumerate(tentativas, 1):
+        vizinhas_dict = tentativa["id_estacoes_vizinhas"]
+        num_bases = len(vizinhas_dict)
+        total_vizinhas = sum(len(v) for v in vizinhas_dict.values())
+        media_vizinhas = total_vizinhas / num_bases if num_bases > 0 else 0
+
+        media_dist = None
+        max_dist = None
+
+        if df_distancias is not None:
+            df_vizinhas = pd.DataFrame([
+                {"id_estacao_base": base, "id_estacao_candidata": candidata}
+                for base, candidatas in vizinhas_dict.items()
+                for candidata in candidatas
+            ])
+            df_vizinhas = df_vizinhas.astype("int64")
+            df_distancias = df_distancias.astype("int64")
+
+            df_merged = df_vizinhas.merge(
+                df_distancias,
+                on=["id_estacao_base", "id_estacao_candidata"],
+                how="left"
+            )
+
+            if not df_merged.empty and df_merged["vl_distancia_km"].notna().any():
+                media_dist = df_merged.groupby("id_estacao_base")["vl_distancia_km"].mean().mean()
+                max_dist = df_merged.groupby("id_estacao_base")["vl_distancia_km"].max().max()
+
+        resumo.append({
+            "tentativa": i,
+            "num_bases": num_bases,
+            "total_vizinhas": total_vizinhas,
+            "media_vizinhas_por_base": media_vizinhas,
+            "media_das_distancias": media_dist,
+            "max_das_distancias": max_dist,
+        })
+
+    df_resumo = pd.DataFrame(resumo)
+
+    if plotar:
+        # Gráfico 1: Média de vizinhas por base
+        plt.figure(figsize=(10, 5))
+        sns.lineplot(data=df_resumo, x="tentativa", y="media_vizinhas_por_base", marker="o")
+        plt.title("Média de vizinhas por base")
+        plt.xlabel("Tentativa")
+        plt.ylabel("Média de vizinhas")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+        # Gráfico 2: Média das distâncias
+        if df_distancias is not None and df_resumo["media_das_distancias"].notna().any():
+            plt.figure(figsize=(10, 5))
+            sns.lineplot(data=df_resumo, x="tentativa", y="media_das_distancias", marker="o")
+            plt.title("Média das distâncias")
+            plt.xlabel("Tentativa")
+            plt.ylabel("Distância média (km)")
+            plt.grid(True)
+            plt.tight_layout()
+            plt.show()
+
+        # Gráfico 3: Máximo das distâncias
+        if df_distancias is not None and df_resumo["max_das_distancias"].notna().any():
+            plt.figure(figsize=(10, 5))
+            sns.lineplot(data=df_resumo, x="tentativa", y="max_das_distancias", marker="o")
+            plt.title("Máximo das distâncias entre vizinhas")
+            plt.xlabel("Tentativa")
+            plt.ylabel("Distância máxima (km)")
+            plt.grid(True)
+            plt.tight_layout()
+            plt.show()
+
+    return df_resumo
+
+
 
 
 
