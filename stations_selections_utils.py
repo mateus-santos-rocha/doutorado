@@ -330,7 +330,7 @@ def gerar_relatorio_vizinhas(
 def comparar_tentativas_vizinhas(
     tentativas: list[dict],
     df_distancias: pd.DataFrame = None,
-    limite_minimo: int = 3,  # ainda usado nos plots
+    df_intersecoes: pd.DataFrame = None,
     plotar: bool = True
 ) -> pd.DataFrame:
     """
@@ -355,6 +355,8 @@ def comparar_tentativas_vizinhas(
 
         media_dist = None
         max_dist = None
+        media_inter = None
+        max_inter = None
 
         if df_distancias is not None:
             df_vizinhas = pd.DataFrame([
@@ -375,6 +377,26 @@ def comparar_tentativas_vizinhas(
                 media_dist = df_merged.groupby("id_estacao_base")["vl_distancia_km"].mean().mean()
                 max_dist = df_merged.groupby("id_estacao_base")["vl_distancia_km"].max().max()
 
+        if df_intersecoes is not None:
+            df_intersecoes = pd.DataFrame([
+                {"id_estacao_base": base, "id_estacao_candidata": candidata}
+                for base, candidatas in vizinhas_dict.items()
+                for candidata in candidatas
+            ])
+            df_vizinhas = df_vizinhas.astype("int64")
+            df_intersecoes = df_intersecoes.astype("int64")
+
+            df_merged = df_intersecoes.merge(
+                df_distancias,
+                on=["id_estacao_base", "id_estacao_candidata"],
+                how="left"
+            )
+
+            if not df_merged.empty and df_merged["pct_intersecao_precipitacao"].notna().any():
+                media_inter = df_merged.groupby("id_estacao_base")["pct_intersecao_precipitacao"].mean().mean()
+                max_inter = df_merged.groupby("id_estacao_base")["pct_intersecao_precipitacao"].max().max()
+
+
         resumo.append({
             "tentativa": i,
             "num_bases": num_bases,
@@ -382,6 +404,8 @@ def comparar_tentativas_vizinhas(
             "media_vizinhas_por_base": media_vizinhas,
             "media_das_distancias": media_dist,
             "max_das_distancias": max_dist,
+            "media_das_intersecoes": media_inter,
+            "max_das_intersecoes": max_inter,
         })
 
     df_resumo = pd.DataFrame(resumo)
@@ -415,6 +439,28 @@ def comparar_tentativas_vizinhas(
             plt.title("Máximo das distâncias entre vizinhas")
             plt.xlabel("Tentativa")
             plt.ylabel("Distância máxima (km)")
+            plt.grid(True)
+            plt.tight_layout()
+            plt.show()
+
+        # Gráfico 4: Média das interseções
+        if df_intersecoes is not None and df_resumo["media_das_intersecoes"].notna().any():
+            plt.figure(figsize=(10, 5))
+            sns.lineplot(data=df_resumo, x="tentativa", y="media_das_intersecoes", marker="o")
+            plt.title("Média das interseções")
+            plt.xlabel("Tentativa")
+            plt.ylabel("%")
+            plt.grid(True)
+            plt.tight_layout()
+            plt.show()
+
+        # Gráfico 5: Máximo das interseções
+        if df_intersecoes is not None and df_resumo["max_das_intersecoes"].notna().any():
+            plt.figure(figsize=(10, 5))
+            sns.lineplot(data=df_resumo, x="tentativa", y="max_das_intersecoes", marker="o")
+            plt.title("Máximo das interseções entre vizinhas")
+            plt.xlabel("Tentativa")
+            plt.ylabel("%")
             plt.grid(True)
             plt.tight_layout()
             plt.show()
