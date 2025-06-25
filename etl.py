@@ -929,6 +929,7 @@ prata_conn.execute(f"""
     FROM df_matriz_intersecoes
 """)
 
+
 ## ------------- ##
 ## FATO ESTAÇÕES ##
 ## ------------- ##
@@ -1274,6 +1275,28 @@ CREATE OR REPLACE TABLE {ouro_dim_estacoes_table_name} AS
 SELECT * FROM ouro_dim_estacoes_df
 """)
 
+## -------------------------- ##
+## FATO ESTAÇÕES PRECIPITAÇÃO ##
+## -------------------------- ##
+
+ouro_fato_estacoes_precipitacao_table_name = 'fato_estacoes_precipitacao'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_precipitacao
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_precipitacao_dado_valido
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_precipitacao_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
 
 ## ----------------------------- ##
 ## FATO ESTAÇÕES LATLON PRODUTOS ##
@@ -1324,30 +1347,7 @@ CREATE OR REPLACE TABLE {ouro_matriz_distancias_table_name} AS
 SELECT * FROM ouro_matriz_distancias
 """)
 
-## --------------------- ##
-## MATRIZ DE INTERSEÇÕES ##
-## --------------------- ##
 
-ouro_matriz_distancias_table_name  = "fato_estacoes_distancia"
-
-estacoes_list = ouro_conn.execute("SELECT DISTINCT id_estacao FROM dim_estacoes").fetch_df()['id_estacao'].tolist()
-
-estacoes_list_str = ','.join([str(id_estacao) for id_estacao in estacoes_list])
-
-ouro_matriz_distancias = prata_conn.execute(f"""
-    SELECT * FROM fato_estacoes_distancia
-    WHERE id_estacao_base IN ({estacoes_list_str})
-    AND id_estacao_candidata IN ({estacoes_list_str})
-""").fetch_df()
-
-ouro_conn.execute(
-f"""
-CREATE OR REPLACE TABLE {ouro_matriz_distancias_table_name} AS
-SELECT * FROM ouro_matriz_distancias
-""")
-
-
-## 
 ## --------------------- ##
 ## MATRIZ DE INTERSEÇÕES ##
 ## --------------------- ##
@@ -1367,4 +1367,91 @@ f"""
 CREATE OR REPLACE TABLE {ouro_matriz_intersecao_table_name} AS
 SELECT * FROM ouro_matriz_intersecao
 """)
+
+
+## --------------------- ##
+## MATRIZ DE CORRELAÇÕES ## 
+## --------------------- ##
+
+ouro_matriz_correlacoes_table_name  = "fato_estacoes_correlacao"
+
+print("Carregando dados da tabela fato_estacoes...")
+df = prata_conn.execute("""
+    SELECT id_estacao, dt_medicao, vl_precipitacao
+    FROM fato_estacoes
+""").fetch_df()
+print(f"Total de linhas carregadas: {len(df)}")
+print(f"Total de estações distintas: {df['id_estacao'].nunique()}")
+print(f"Total de datas distintas: {df['dt_medicao'].nunique()}")
+
+print("Pivotando dados...")
+pivot_df = df.pivot_table(
+    index="dt_medicao",
+    columns="id_estacao",
+    values="vl_precipitacao"
+)
+print(f"Dimensões da matriz pivotada: {pivot_df.shape}")
+
+print("Calculando correlações...")
+cor_matrix = pivot_df.corr(method="pearson").fillna(0)
+print("Correlação calculada.")
+
+print("Convertendo matriz de correlação para formato longo...")
+
+cor_matrix.columns.name = None
+cor_matrix.index.name = None
+
+correlacoes_df = (
+    cor_matrix
+    .stack()
+    .reset_index()
+    .rename(columns={
+        "level_0": "id_estacao_base",
+        "level_1": "id_estacao_vizinha",
+        0: "correlacao"
+    })
+)
+correlacoes_df = correlacoes_df[
+    correlacoes_df["id_estacao_base"] != correlacoes_df["id_estacao_vizinha"]
+].reset_index(drop=True)
+print(f"Total de pares com correlação: {len(correlacoes_df)}")
+
+print("Calculando número de datas em comum entre pares...")
+presence_matrix = ~pivot_df.isna()
+n_pontos = presence_matrix.T.dot(presence_matrix).astype(int)
+
+n_pontos_df = (
+    n_pontos
+    .stack()
+    .reset_index()
+    .rename(columns={
+        "level_0": "id_estacao_base",
+        "level_1": "id_estacao_vizinha",
+        0: "n_pontos_comuns"
+    })
+)
+n_pontos_df = n_pontos_df[
+    n_pontos_df["id_estacao_base"] != n_pontos_df["id_estacao_vizinha"]
+].reset_index(drop=True)
+print(f"Total de pares com interseção de datas: {len(n_pontos_df)}")
+
+print("Juntando correlação com número de datas em comum...")
+ouro_matriz_correlacoes_df = correlacoes_df.merge(
+    n_pontos_df,
+    on=["id_estacao_base", "id_estacao_vizinha"]
+).rename(columns={
+    'id_estacao_vizinha':'id_estacao_candidata'
+})
+print("Tabela final construída com sucesso!")
+
+ouro_matriz_correlacoes_df = ouro_matriz_correlacoes_df.ren
+
+ouro_conn.execute(f"""
+    CREATE OR REPLACE TABLE {ouro_matriz_correlacoes_table_name} AS
+    SELECT
+        *
+    FROM ouro_matriz_correlacoes_df
+""")
+
+
 
