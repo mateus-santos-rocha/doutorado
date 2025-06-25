@@ -9,7 +9,8 @@ import os
 import json
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
+import duckdb
+import numpy as np
 
 def get_distancias(conn, id_estacao_base):
     rows = conn.execute(
@@ -159,7 +160,7 @@ def selecionar_estacoes_candidatas(
     return problem_status, final_selected_indices, final_deviations, final_objective, id_estacoes_vizinhas
 
 
-def executar_teste(i, params, estacoes,distancias_dict,intersecoes_dict):
+def executar_teste(i, params, estacoes,distancias_dict,intersecoes_dict,prefix):
     peso_distancia, peso_intersecao, min_estacoes_candidatas, max_estacoes_candidatas, max_distancia_aceita, min_intersecao_aceito = params
 
     try:
@@ -208,7 +209,7 @@ def executar_teste(i, params, estacoes,distancias_dict,intersecoes_dict):
             "erro": str(e)
         }
 
-    caminho_arquivo = os.path.join("testes_goal_programming", f"tentativa_{i}.json")
+    caminho_arquivo = os.path.join("testes_goal_programming", f"{prefix}_{i}.json")
     os.makedirs(os.path.dirname(caminho_arquivo), exist_ok=True)
     with open(caminho_arquivo, "w", encoding="utf-8") as f:
         json.dump(resultado, f, ensure_ascii=False, indent=4)
@@ -224,7 +225,8 @@ def testar_multiplos_parametros_gp(
     valores_min_intersecao,
     estacoes,
     distancias_dict,
-    intersecoes_dict
+    intersecoes_dict,
+    prefix
 ):
     """
     Testa múltiplas combinações de parâmetros sequencialmente para seleção de estações via programação por metas.
@@ -243,7 +245,7 @@ def testar_multiplos_parametros_gp(
     ))
 
     for i, params in enumerate(tqdm(combinacoes, desc="Testando combinações de parâmetros")):
-        resultado = executar_teste(i + 1, params, estacoes,distancias_dict,intersecoes_dict)
+        resultado = executar_teste(i + 1, params, estacoes,distancias_dict,intersecoes_dict,prefix)
         print(resultado)
 
 def gerar_relatorio_vizinhas(
@@ -327,145 +329,65 @@ def gerar_relatorio_vizinhas(
     print("=" * 50)
 
 
-def comparar_tentativas_vizinhas(
-    tentativas: list[dict],
-    df_distancias: pd.DataFrame = None,
-    df_intersecoes: pd.DataFrame = None,
-    plotar: bool = True
-) -> pd.DataFrame:
-    """
-    Resume e compara o desempenho de várias tentativas de seleção de estações vizinhas.
+def get_resumo_tentativa(numero_tentativas_total,path_prefix,output_path):
 
-    Args:
-        tentativas (list): Lista de dicionários, cada um com 'id_estacoes_vizinhas'.
-        df_distancias (pd.DataFrame): DataFrame com colunas id_estacao_base, id_estacao_candidata, vl_distancia_km.
-        limite_minimo (int): Quantidade mínima de vizinhas por base para destaque nos plots.
-        plotar (bool): Se True, plota gráficos de comparação.
+    if os.path.isfile(output_path):
+        df_grouped = pd.read_csv(output_path)
+    else:
+        
+        numeros_tentativas = range(1,numero_tentativas_total+1)
+        paths = {n_tentativa:f'{path_prefix}{n_tentativa}.json' for n_tentativa in numeros_tentativas}
+        tentativas = {}
+        for n_tentativa,path in paths.items():
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                tentativas[n_tentativa] = data
 
-    Returns:
-        pd.DataFrame: Tabela com métricas de cada tentativa.
-    """
-    resumo = []
 
-    for i, tentativa in enumerate(tentativas, 1):
-        vizinhas_dict = tentativa["id_estacoes_vizinhas"]
-        num_bases = len(vizinhas_dict)
-        total_vizinhas = sum(len(v) for v in vizinhas_dict.values())
-        media_vizinhas = total_vizinhas / num_bases if num_bases > 0 else 0
+        ouro_conn = duckdb.connect('ouro_db')
+        df_distancias = ouro_conn.execute("select * from fato_estacoes_distancia").fetchdf()
+        df_intersecoes = ouro_conn.execute("select * from fato_estacoes_intersecao").fetchdf()
+        ouro_conn.close()
+        df_grouped = None
 
-        media_dist = None
-        max_dist = None
-        media_inter = None
-        max_inter = None
+        for n_tentativa,tentativa in tqdm(tentativas.items(),desc='Obtendo informações resumidas das tentativas',leave=False):
 
-        if df_distancias is not None:
             df_vizinhas = pd.DataFrame([
-                {"id_estacao_base": base, "id_estacao_candidata": candidata}
-                for base, candidatas in vizinhas_dict.items()
-                for candidata in candidatas
-            ])
-            df_vizinhas = df_vizinhas.astype("int64")
-            df_distancias = df_distancias.astype("int64")
+                            {"id_estacao_base": base, "id_estacao_candidata": candidata}
+                            for base, candidatas in tentativa['id_estacoes_vizinhas'].items()
+                            for candidata in candidatas
+                        ])
 
-            df_merged = df_vizinhas.merge(
-                df_distancias,
-                on=["id_estacao_base", "id_estacao_candidata"],
-                how="left"
+            df_vizinhas['id_estacao_base'] = df_vizinhas['id_estacao_base'].astype(int)
+            df_vizinhas['id_estacao_candidata'] = df_vizinhas['id_estacao_candidata'].astype(int)
+
+            df_merged = df_vizinhas \
+                .merge(df_distancias,on=['id_estacao_base','id_estacao_candidata'],how='inner') \
+                .merge(df_intersecoes,on=['id_estacao_base','id_estacao_candidata'],how='inner')
+            
+            df_grouped_current = df_merged.groupby('id_estacao_base',as_index=False).agg(
+                n_estacoes_vizinhas = ('id_estacao_candidata','count'),
+                mean_vl_distancia_km = ('vl_distancia_km','mean'),
+                max_vl_distancia_km = ('vl_distancia_km','max'),
+                mean_pct_intersecao_precipitacao = ('pct_intersecao_precipitacao','mean'),
+                min_pct_intersecao_precipitacao = ('pct_intersecao_precipitacao','min')
             )
+            df_grouped_current['n_tentativa'] = n_tentativa
 
-            if not df_merged.empty and df_merged["vl_distancia_km"].notna().any():
-                media_dist = df_merged.groupby("id_estacao_base")["vl_distancia_km"].mean().mean()
-                max_dist = df_merged.groupby("id_estacao_base")["vl_distancia_km"].max().max()
+            for k,v in tentativa['Parametros'].items():
+                df_grouped_current[f'param_{k}'] = v if not v is None else np.nan
 
-        if df_intersecoes is not None:
-            df_intersecoes = pd.DataFrame([
-                {"id_estacao_base": base, "id_estacao_candidata": candidata}
-                for base, candidatas in vizinhas_dict.items()
-                for candidata in candidatas
-            ])
-            df_vizinhas = df_vizinhas.astype("int64")
-            df_intersecoes = df_intersecoes.astype("int64")
+                
 
-            df_merged = df_intersecoes.merge(
-                df_distancias,
-                on=["id_estacao_base", "id_estacao_candidata"],
-                how="left"
-            )
+            if df_grouped is None:
+                df_grouped = df_grouped_current.copy()
+            else:
+                df_grouped = pd.concat([df_grouped,df_grouped_current])
 
-            if not df_merged.empty and df_merged["pct_intersecao_precipitacao"].notna().any():
-                media_inter = df_merged.groupby("id_estacao_base")["pct_intersecao_precipitacao"].mean().mean()
-                max_inter = df_merged.groupby("id_estacao_base")["pct_intersecao_precipitacao"].max().max()
+        df_grouped.to_csv(output_path,index=False)
+            
+    return df_grouped
 
-
-        resumo.append({
-            "tentativa": i,
-            "num_bases": num_bases,
-            "total_vizinhas": total_vizinhas,
-            "media_vizinhas_por_base": media_vizinhas,
-            "media_das_distancias": media_dist,
-            "max_das_distancias": max_dist,
-            "media_das_intersecoes": media_inter,
-            "max_das_intersecoes": max_inter,
-        })
-
-    df_resumo = pd.DataFrame(resumo)
-
-    if plotar:
-        # Gráfico 1: Média de vizinhas por base
-        plt.figure(figsize=(10, 5))
-        sns.lineplot(data=df_resumo, x="tentativa", y="media_vizinhas_por_base", marker="o")
-        plt.title("Média de vizinhas por base")
-        plt.xlabel("Tentativa")
-        plt.ylabel("Média de vizinhas")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-        # Gráfico 2: Média das distâncias
-        if df_distancias is not None and df_resumo["media_das_distancias"].notna().any():
-            plt.figure(figsize=(10, 5))
-            sns.lineplot(data=df_resumo, x="tentativa", y="media_das_distancias", marker="o")
-            plt.title("Média das distâncias")
-            plt.xlabel("Tentativa")
-            plt.ylabel("Distância média (km)")
-            plt.grid(True)
-            plt.tight_layout()
-            plt.show()
-
-        # Gráfico 3: Máximo das distâncias
-        if df_distancias is not None and df_resumo["max_das_distancias"].notna().any():
-            plt.figure(figsize=(10, 5))
-            sns.lineplot(data=df_resumo, x="tentativa", y="max_das_distancias", marker="o")
-            plt.title("Máximo das distâncias entre vizinhas")
-            plt.xlabel("Tentativa")
-            plt.ylabel("Distância máxima (km)")
-            plt.grid(True)
-            plt.tight_layout()
-            plt.show()
-
-        # Gráfico 4: Média das interseções
-        if df_intersecoes is not None and df_resumo["media_das_intersecoes"].notna().any():
-            plt.figure(figsize=(10, 5))
-            sns.lineplot(data=df_resumo, x="tentativa", y="media_das_intersecoes", marker="o")
-            plt.title("Média das interseções")
-            plt.xlabel("Tentativa")
-            plt.ylabel("%")
-            plt.grid(True)
-            plt.tight_layout()
-            plt.show()
-
-        # Gráfico 5: Máximo das interseções
-        if df_intersecoes is not None and df_resumo["max_das_intersecoes"].notna().any():
-            plt.figure(figsize=(10, 5))
-            sns.lineplot(data=df_resumo, x="tentativa", y="max_das_intersecoes", marker="o")
-            plt.title("Máximo das interseções entre vizinhas")
-            plt.xlabel("Tentativa")
-            plt.ylabel("%")
-            plt.grid(True)
-            plt.tight_layout()
-            plt.show()
-
-    return df_resumo
 
 
 
