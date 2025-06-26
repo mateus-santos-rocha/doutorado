@@ -1453,5 +1453,35 @@ ouro_conn.execute(f"""
     FROM ouro_matriz_correlacoes_df
 """)
 
+## ---------------------------------- ##
+## FATO_ESTAÇÕES_BASE_FILA_PRIORIDADE ## 
+## ---------------------------------- ##
+
+ouro_fato_estacoes_fila_prioridade_table_name  = "fato_estacoes_base_fila_prioridade"
+
+fato_estacoes_fila_prioridade_df = ouro_conn.execute(
+"""
+SELECT
+    correlacao.id_estacao_base
+    ,correlacao.id_estacao_candidata
+    ,correlacao.correlacao
+    ,intersecao.pct_intersecao_precipitacao
+    ,distancia.vl_distancia_km
+FROM fato_estacoes_correlacao AS correlacao
+JOIN fato_estacoes_intersecao AS intersecao
+    ON correlacao.id_estacao_base = intersecao.id_estacao_base
+    AND correlacao.id_estacao_candidata = intersecao.id_estacao_candidata
+JOIN fato_estacoes_distancia AS distancia
+    ON correlacao.id_estacao_base = distancia.id_estacao_base
+    AND correlacao.id_estacao_candidata = distancia.id_estacao_candidata
+""").fetch_df()
+
+ouro_conn.execute(f"""
+    CREATE OR REPLACE TABLE {ouro_fato_estacoes_fila_prioridade_table_name} AS
+    SELECT
+        *
+    FROM fato_estacoes_fila_prioridade_df
+""")
+
 
 
