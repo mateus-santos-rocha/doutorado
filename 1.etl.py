@@ -1,8 +1,7 @@
 import pandas as pd
 import numpy as np
 import duckdb
-import os
-import shutil
+import os 
 from etl_utils import descompactar_e_mover,geotiff_to_dataframe,encontrar_coordenadas_mais_proximas,calcular_intersecoes_estacoes_vizinhas
 from tqdm.notebook import tqdm
 
