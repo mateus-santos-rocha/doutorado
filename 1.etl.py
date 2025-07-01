@@ -1274,6 +1274,207 @@ CREATE OR REPLACE TABLE {ouro_dim_estacoes_table_name} AS
 SELECT * FROM ouro_dim_estacoes_df
 """)
 
+## ---------------------------------------- ##
+## FATO ESTAÇÕES VELOCIDADE VENTO 10M MÉDIA ##
+## ---------------------------------------- ##
+
+ouro_fato_estacoes_velocidade_vento_10m_media_table_name = 'fato_estacoes_velocidade_vento_10m_media'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_velocidade_vento_10m_media
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_velocidade_vento_10m_media_dado_valido
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_velocidade_vento_10m_media_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
+## --------------------------------------- ##
+## FATO ESTAÇÕES VELOCIDADE VENTO 2M MÉDIA ##
+## --------------------------------------- ##
+
+ouro_fato_estacoes_velocidade_vento_2m_media_table_name = 'fato_estacoes_velocidade_vento_2m_media'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_velocidade_vento_2m_media
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_velocidade_vento_2m_media_dado_valido
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_velocidade_vento_2m_media_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
+
+## ---------------------------------------- ##
+## FATO ESTAÇÕES VELOCIDADE VENTO 2M MÁXIMA ##
+## ---------------------------------------- ##
+
+ouro_fato_estacoes_velocidade_vento_2m_maxima_table_name = 'fato_estacoes_velocidade_vento_2m_maxima'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_velocidade_vento_2m_maxima
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_velocidade_vento_2m_maxima_dado_valido
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_velocidade_vento_2m_maxima_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
+## ------------------------------------- ##
+## FATO ESTAÇÕES UMIDADE RELATIVA MÍNIMA ##
+## ------------------------------------- ##
+
+ouro_fato_estacoes_umidade_relativa_minima_table_name = 'fato_estacoes_umidade_relativa_minima'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_umidade_relativa_minima
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_umidade_relativa_minima_dado_valido
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_umidade_relativa_minima_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
+## ------------------------------------ ##
+## FATO ESTAÇÕES UMIDADE RELATIVA MÉDIA ##
+## ------------------------------------ ##
+
+ouro_fato_estacoes_umidade_relativa_media_table_name = 'fato_estacoes_umidade_relativa_media'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_umidade_relativa_media
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_umidade_relativa_media_dado_valido
+""")
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_umidade_relativa_media_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
+## ------------------------------------- ##
+## FATO ESTAÇÕES UMIDADE RELATIVA MÁXIMA ##
+## ------------------------------------- ##
+
+ouro_fato_estacoes_umidade_relativa_maxima_table_name = 'fato_estacoes_umidade_relativa_maxima'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_umidade_relativa_maxima
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_umidade_relativa_maxima_dado_valido -- Assumindo um flag de validação correspondente
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_umidade_relativa_maxima_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
+## -------------------------------- ##
+## FATO ESTAÇÕES TEMPERATURA MÍNIMA ##
+## -------------------------------- ##
+
+ouro_fato_estacoes_temperatura_minima_table_name = 'fato_estacoes_temperatura_minima'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_temperatura_minima
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_temperatura_minima_dado_valido
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_temperatura_minima_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
+## ------------------------------- ##
+## FATO ESTAÇÕES TEMPERATURA MÉDIA ##
+## ------------------------------- ##
+
+ouro_fato_estacoes_temperatura_media_table_name = 'fato_estacoes_temperatura_media'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_temperatura_media
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_temperatura_media_dado_valido
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_temperatura_media_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
+
+## -------------------------------- ##
+## FATO ESTAÇÕES TEMPERATURA MÁXIMA ##
+## -------------------------------- ##
+
+
+ouro_fato_estacoes_temperatura_maxima_table_name = 'fato_estacoes_temperatura_maxima'
+ouro_fato_estacoes_df = prata_conn.execute(
+f"""
+SELECT 
+    dt_medicao
+    ,id_estacao
+    ,vl_temperatura_maxima
+FROM fato_estacoes
+WHERE 1=1
+    AND fl_temperatura_maxima_dado_valido
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_estacoes_temperatura_maxima_table_name} AS
+SELECT * FROM ouro_fato_estacoes_df
+""")
+
 ## -------------------------- ##
 ## FATO ESTAÇÕES PRECIPITAÇÃO ##
 ## -------------------------- ##
