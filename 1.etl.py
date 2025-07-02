@@ -1683,5 +1683,128 @@ ouro_conn.execute(f"""
     FROM fato_estacoes_fila_prioridade_df
 """)
 
+## ------------------- ##
+## FATO_PRODUTO_CHIRPS ##
+## ------------------- ##
 
+ouro_fato_produto_chirps = 'fato_produto_chirps'
 
+prata_fato_produto_chirps_df = prata_conn.execute(
+"""
+SELECT
+    CAST(dt_medicao AS DATE) AS dt_medicao
+    ,lat
+    ,lon
+    ,ROUND(vl_precipitacao,2) AS vl_precipitacao
+ FROM fato_produto_chirps
+ WHERE 1=1
+    AND vl_precipitacao >= 0
+ """).fetch_df()
+
+ouro_fato_produto_chirps_df = prata_fato_produto_chirps_df.loc[prata_fato_produto_chirps_df['vl_precipitacao']!=-9999]
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_produto_chirps} AS
+SELECT * FROM ouro_fato_produto_chirps_df
+""")
+
+## ---------------- ##
+## FATO_PRODUTO_CPC ##
+## ---------------- ##
+
+ouro_fato_produto_cpc = 'fato_produto_cpc'
+
+ouro_fato_produto_cpc_df = prata_conn.execute(
+"""
+SELECT
+    dt_medicao
+    ,lat
+    ,lon
+    ,ROUND(vl_precipitacao,2) AS vl_precipitacao
+    ,ROUND(vl_temperatura_maxima,2) AS vl_temperatura_maxima
+    ,ROUND(vl_temperatura_minima,2) AS vl_temperatura_minima
+FROM fato_produto_cpc
+WHERE COALESCE(vl_precipitacao,-1) >= 0
+    OR COALESCE(vl_temperatura_maxima,-1) >= 0 
+    OR COALESCE(vl_temperatura_minima,-1) >= 0
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_produto_cpc} AS
+SELECT * FROM ouro_fato_produto_cpc_df
+""")
+
+## -------------------------- ##
+## FATO_PRODUTO_GPM_FINAL_RUN ##
+## -------------------------- ##
+
+ouro_fato_produto_gpm_final_run = 'fato_produto_gpm_final_run'
+
+ouro_fato_produto_gpm_final_run_df = prata_conn.execute(
+"""
+SELECT
+    *
+FROM fato_produto_gpm_final_run
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_produto_gpm_final_run} AS
+SELECT * FROM ouro_fato_produto_gpm_final_run_df
+""")
+
+## ------------------------- ##
+## FATO_PRODUTO_GPM_LATE_RUN ##
+## ------------------------- ##
+
+ouro_fato_produto_gpm_late_run = 'fato_produto_gpm_late_run'
+
+ouro_fato_produto_gpm_late_run_df = prata_conn.execute(
+"""
+SELECT
+    *
+FROM fato_produto_gpm_late_run
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_produto_gpm_late_run} AS
+SELECT * FROM ouro_fato_produto_gpm_late_run_df
+""")
+
+## ------------------ ##
+## FATO_PRODUTO_POWER ##
+## ------------------ ##
+
+ouro_fato_produto_power = 'fato_produto_power'
+
+ouro_fato_produto_power_df = prata_conn.execute(
+"""
+SELECT
+    dt_medicao
+    ,lat
+    ,lon
+    ,vl_precipitacao
+    ,vl_temperatura_maxima_2m AS vl_temperatura_maxima_2m_K
+    ,vl_temperatura_media_2m AS vl_temperatura_media_2m_K
+    ,vl_temperatura_minima_2m AS vl_temperatura_minima_2m_K
+    ,vl_umidade_relativa_2m
+    ,vl_pressao_nivel_superficie
+    ,vl_irradiancia_allsky
+    ,vl_direcao_vento_10m
+    ,vl_direcao_vento_2m
+    ,vl_temperatura_orvalho_2m AS vl_temperatura_orvalho_2m_K
+    ,vl_vento_10m
+    ,vl_vento_medio_2m
+    ,vl_vento_maximo_2m
+    ,vl_vento_maximo_10m
+FROM fato_produto_power
+""").fetch_df()
+
+ouro_conn.execute(
+f"""
+CREATE OR REPLACE TABLE {ouro_fato_produto_power} AS
+SELECT * FROM ouro_fato_produto_power_df
+""")
