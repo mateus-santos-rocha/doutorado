@@ -14,3 +14,4 @@ def apply_P_as_column(fato_estacoes_base_fila_prioridade,P,D_medio=15,fator_deca
         fator_decaimento=fator_decaimento
     )
     return df["P"]
+    
