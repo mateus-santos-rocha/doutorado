@@ -64,3 +64,8 @@ def recall(y_true,y_pred,error_threshold=0.1,min_relevancia=0.5):
 def precision(y_true,y_pred,error_threshold=0.1,min_relevancia=0.5):
     index_relevant = np.where(relevance_function(y_pred)>=min_relevancia)[0]
     return sum(accuracy(y_true[index_relevant],y_pred[index_relevant],error_threshold)*relevance_function(y_pred[index_relevant]))/sum(relevance_function(y_pred[index_relevant]))
+
+def F_score(y_true, y_pred, beta, error_threshold, min_relevancia):
+    p = precision(y_true, y_pred, error_threshold, min_relevancia)
+    r = recall(y_true, y_pred, error_threshold, min_relevancia)
+    return ((1 + beta**2) * p * r) / ((beta**2) * p + r)

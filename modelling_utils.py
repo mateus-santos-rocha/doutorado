@@ -10,9 +10,7 @@ def split_com_sem_vizinha(abt_estacoes_vizinhas,threshold_prioridade):
         .loc[abt_estacoes_vizinhas['vl_prioridade_vizinha'].fillna(0) >= threshold_prioridade] \
         .sort_values(by=['id_estacao','dt_medicao'])
 
-    abt_sem_vizinha = abt_estacoes_vizinhas \
-        .loc[abt_estacoes_vizinhas['vl_prioridade_vizinha'].fillna(0) < threshold_prioridade] \
-        .sort_values(by=['id_estacao','dt_medicao'])
+    abt_sem_vizinha = abt_estacoes_vizinhas.copy()
 
     return abt_com_vizinha,abt_sem_vizinha
 
