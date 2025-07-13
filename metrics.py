@@ -1,4 +1,5 @@
 from sklearn.metrics import r2_score,root_mean_squared_error,mean_absolute_error
+from metrics_utils import relevance_function,accuracy
 import numpy as np
 
 def R2_determinacao(y_pred,y_true):
@@ -55,3 +56,11 @@ def PMC_A(y_true, y_pred, erro, chuva_minima):
     pmc_a = (previsoes_corretas / total_chuva_pesada) * 100 if total_chuva_pesada > 0 else 0.0
     
     return pmc_a
+
+def recall(y_true,y_pred,error_threshold=0.1,min_relevancia=0.5):
+    index_relevant = np.where(relevance_function(y_true)>=min_relevancia)[0]
+    return sum(accuracy(y_true[index_relevant],y_pred[index_relevant],error_threshold)*relevance_function(y_true[index_relevant]))/sum(relevance_function(y_true[index_relevant]))
+
+def precision(y_true,y_pred,error_threshold=0.1,min_relevancia=0.5):
+    index_relevant = np.where(relevance_function(y_pred)>=min_relevancia)[0]
+    return sum(accuracy(y_true[index_relevant],y_pred[index_relevant],error_threshold)*relevance_function(y_pred[index_relevant]))/sum(relevance_function(y_pred[index_relevant]))
