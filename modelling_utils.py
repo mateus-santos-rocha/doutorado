@@ -36,17 +36,24 @@ def feature_selection(df,feature_list,target):
     y = df[target]
     return X,y
 
-def undersample_zeros(X, y, random_state=42):
+import numpy as np
+import pandas as pd
+from sklearn.utils import resample
+
+def undersample_zeros(X, y, zero_ratio=1.0, random_state=42):
     """
-    Realiza undersampling das amostras com target igual a zero para balancear com amostras onde y > 0.
+    Realiza undersampling dos casos com target zero para balancear com casos com target > 0,
+    de acordo com a razão especificada (zero_ratio).
 
     Parâmetros:
         X (pd.DataFrame ou np.ndarray): Features.
         y (pd.Series ou np.ndarray): Target de regressão (espera-se muitos zeros).
+        zero_ratio (float): Proporção desejada de amostras com y == 0 em relação ao número de y > 0.
+                            Ex: 1.0 → balanceado; 0.5 → metade dos zeros.
         random_state (int): Semente para reprodutibilidade.
 
     Retorna:
-        X_bal, y_bal: X e y balanceados.
+        X_bal, y_bal: Features e target após o undersampling.
     """
     # Converter para DataFrame/Séries se necessário
     if isinstance(X, np.ndarray):
@@ -64,11 +71,19 @@ def undersample_zeros(X, y, random_state=42):
     X_non_zero = X[non_zero_mask]
     y_non_zero = y[non_zero_mask]
 
-    # Fazer undersampling para igualar ao número de amostras não-zero
+    # Calcular quantidade desejada de zeros
+    n_non_zero = len(y_non_zero)
+    n_zero_desired = int(zero_ratio * n_non_zero)
+    n_zero_available = len(y_zero)
+
+    # Garantir que não pediremos mais zeros do que existem
+    n_zero_final = min(n_zero_desired, n_zero_available)
+
+    # Fazer undersampling
     X_zero_downsampled, y_zero_downsampled = resample(
         X_zero, y_zero,
         replace=False,
-        n_samples=len(y_non_zero),
+        n_samples=n_zero_final,
         random_state=random_state
     )
 
