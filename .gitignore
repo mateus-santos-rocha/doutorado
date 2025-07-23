@@ -9,3 +9,7 @@ testes_goal_programming
 prata_db.tmp
 modelling_db
 ouro_db.tmp
+models
+abt_estacoes_vizinhas.csv
+abt_estacoes_vizinhas.parquet
+final_abt.parquet

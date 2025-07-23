@@ -95,3 +95,7 @@ def undersample_zeros(X, y, zero_ratio=1.0, random_state=42):
     X_bal, y_bal = resample(X_bal, y_bal, random_state=random_state)
 
     return X_bal.reset_index(drop=True), y_bal.reset_index(drop=True)
+
+def drop_estacoes_vizinhas(abt_estacoes_vizinhas):
+    dropped_df = abt_estacoes_vizinhas.drop(['vl_precipitacao_vizinha','vl_correlacao_vizinha','pct_intersecao_precipitacao_vizinha','vl_distancia_km_vizinha','estacao_vizinha_escolhida','vl_prioridade_vizinha'],axis=1)
+    return dropped_df
