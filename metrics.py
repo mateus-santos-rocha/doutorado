@@ -57,15 +57,48 @@ def PMC_A(y_true, y_pred, erro, chuva_minima):
     
     return pmc_a
 
-def recall(y_true,y_pred,error_threshold=0.1,min_relevancia=0.5):
-    index_relevant = np.where(relevance_function(y_true)>=min_relevancia)[0]
-    return sum(accuracy(y_true[index_relevant],y_pred[index_relevant],error_threshold)*relevance_function(y_true[index_relevant]))/sum(relevance_function(y_true[index_relevant]))
+def recall(y_true, y_pred, error_threshold=0.1, min_relevancia=0.5):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    
+    index_relevant = np.where(relevance_function(y_true) >= min_relevancia)[0]
 
-def precision(y_true,y_pred,error_threshold=0.1,min_relevancia=0.5):
-    index_relevant = np.where(relevance_function(y_pred)>=min_relevancia)[0]
-    return sum(accuracy(y_true[index_relevant],y_pred[index_relevant],error_threshold)*relevance_function(y_pred[index_relevant]))/sum(relevance_function(y_pred[index_relevant]))
+    if len(index_relevant) == 0:
+        return 0.0
+
+    return (
+        np.sum(
+            accuracy(y_true[index_relevant], y_pred[index_relevant], error_threshold)
+            * relevance_function(y_true[index_relevant])
+        )
+        / np.sum(relevance_function(y_true[index_relevant]))
+    )
+
+
+def precision(y_true, y_pred, error_threshold=0.1, min_relevancia=0.5):
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+    
+    index_relevant = np.where(relevance_function(y_pred) >= min_relevancia)[0]
+    
+    if len(index_relevant) == 0:
+        return 0.0  # evita divisão por zero
+
+    return (
+        np.sum(
+            accuracy(y_true[index_relevant], y_pred[index_relevant], error_threshold)
+            * relevance_function(y_pred[index_relevant])
+        )
+        / np.sum(relevance_function(y_pred[index_relevant]))
+    )
+
 
 def F_score(y_true, y_pred, beta, error_threshold, min_relevancia):
     p = precision(y_true, y_pred, error_threshold, min_relevancia)
     r = recall(y_true, y_pred, error_threshold, min_relevancia)
-    return ((1 + beta**2) * p * r) / ((beta**2) * p + r)
+
+    denominador = (beta ** 2) * p + r
+    if denominador == 0:
+        return 0.0
+
+    return ((1 + beta ** 2) * p * r) / denominador

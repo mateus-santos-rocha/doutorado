@@ -1,7 +1,11 @@
 import numpy as np
 
-def relevance_function(x,x_0=25,a=2):
-    return 1-x_0**a/(x**a+x_0**a)
+def relevance_function(x, x_0=25, a=2):
+    x = np.array(x, dtype=float)
+
+    x = np.clip(x, 0, None)
+
+    return 1 - (x_0 ** a) / (x ** a + x_0 ** a)
 
 def loss_function(y_true,y_pred):
     return np.abs(1-y_pred/y_true)
