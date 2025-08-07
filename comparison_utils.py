@@ -200,3 +200,74 @@ def plot_metric_by_bin(
     plt.xlabel('Bin prioridade')
     plt.tight_layout()
     plt.show()
+
+
+def get_all_comparisons(model_numbers):
+    models,comparisons,metrics = {},{},{}
+    for model_number in model_numbers:
+        model_path,comparison_path = f'models/model_{model_number}.pkl',f'comparisons/comparison_{model_number}.pkl'
+        models[model_number],comparisons[model_number] = import_model_and_comparison(model_path,comparison_path)
+        if type(models[model_number]) == dict:
+            comparisons[model_number] = pd.concat(comparisons[model_number].values())
+
+        comparisons[model_number]['model'] = f'model_{model_number}'
+
+    return pd.concat(comparisons.values())
+
+
+def get_metrics_per_station(comparison_df):
+
+    comparisons = comparison_df.copy()
+    estacoes = comparisons['id_estacao'].unique()
+    dim_lat_lon = comparisons[['id_estacao', 'latitude', 'longitude']].drop_duplicates()
+
+    comparisons_estacoes = {
+        model_number: {
+            id_estacao: group.loc[group['id_estacao'] == id_estacao].copy()
+            for id_estacao in group['id_estacao'].unique()
+        }
+        for model_number, group in comparisons.groupby('model')
+    }
+
+    metrics_estacoes = {
+        model_number: {
+            id_estacao: compute_metrics(
+                comparisons_estacoes[model_number][id_estacao]['y_test'],
+                comparisons_estacoes[model_number][id_estacao]['y_pred']
+            )
+            for id_estacao in comparisons_estacoes[model_number]
+        }
+        for model_number in comparisons_estacoes
+    }
+
+    dados = []
+    for model_number, estacoes_dict in metrics_estacoes.items():
+        for id_estacao, metricas in estacoes_dict.items():
+            linha = {"model_number": model_number, "id_estacao": id_estacao}
+            linha.update(metricas)
+            dados.append(linha)
+
+    df_metricas = pd.DataFrame(dados)
+
+    df_metricas = df_metricas.merge(dim_lat_lon, on='id_estacao', how='left')
+
+    return df_metricas
+
+
+def plot_model_prediction_vs_observation(comparison_df, model_number, id_estacao):
+    data = comparison_df.loc[
+        (comparison_df['model'] == f'model_{model_number}') & 
+        (comparison_df['id_estacao'] == id_estacao),
+        ['dt_medicao', 'y_test', 'y_pred']
+    ]
+    data = pd.melt(data, id_vars=['dt_medicao'], value_vars=['y_test', 'y_pred']).rename(
+        columns={'variable': 'tipo', 'value': 'vl_precipitacao'}
+    )
+    g = sns.lineplot(data=data, x='dt_medicao', y='vl_precipitacao', hue='tipo')
+    plt.grid()
+    g.set_axisbelow(True)
+    plt.title(f'Previsões vs Observações para Estação {id_estacao} - Modelo {model_number}')
+    plt.show()
+
+
+

@@ -6,7 +6,7 @@ import pickle
 from comparison_utils import compute_comparison_df
 
 
-def get_abt_estacoes_vizinhas(modelling_conn,abt_estacoes_vizinhas_table_name = 'abt_estacoes_vizinhas',create_dt_columns=True):
+def get_abt_estacoes_vizinhas(modelling_conn,abt_estacoes_vizinhas_table_name = 'abt_estacoes_5_vizinhas',create_dt_columns=True):
     abt_estacoes_vizinhas = modelling_conn.execute(f"""SELECT * FROM {abt_estacoes_vizinhas_table_name}""").fetchdf()
     if create_dt_columns:
         abt_estacoes_vizinhas['dt_medicao_mes'] = abt_estacoes_vizinhas['dt_medicao'].dt.month
