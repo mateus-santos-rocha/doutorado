@@ -15,7 +15,7 @@ def get_abt_estacoes_vizinhas(modelling_conn,abt_estacoes_vizinhas_table_name = 
 
 def split_com_sem_vizinha(abt_estacoes_vizinhas,threshold_prioridade):
     abt_com_vizinha = abt_estacoes_vizinhas \
-        .loc[abt_estacoes_vizinhas['vl_prioridade_vizinha'].fillna(0) >= threshold_prioridade] \
+        .loc[abt_estacoes_vizinhas['vl_prioridade_vizinha_1'].fillna(0) >= threshold_prioridade] \
         .sort_values(by=['id_estacao','dt_medicao'])
 
     abt_sem_vizinha = abt_estacoes_vizinhas.copy()
@@ -43,27 +43,11 @@ import pandas as pd
 from sklearn.utils import resample
 
 def undersample_zeros(X, y, zero_ratio=1.0, random_state=42):
-    """
-    Realiza undersampling dos casos com target zero para balancear com casos com target > 0,
-    de acordo com a razão especificada (zero_ratio).
-
-    Parâmetros:
-        X (pd.DataFrame ou np.ndarray): Features.
-        y (pd.Series ou np.ndarray): Target de regressão (espera-se muitos zeros).
-        zero_ratio (float): Proporção desejada de amostras com y == 0 em relação ao número de y > 0.
-                            Ex: 1.0 → balanceado; 0.5 → metade dos zeros.
-        random_state (int): Semente para reprodutibilidade.
-
-    Retorna:
-        X_bal, y_bal: Features e target após o undersampling.
-    """
-    # Converter para DataFrame/Séries se necessário
     if isinstance(X, np.ndarray):
         X = pd.DataFrame(X)
     if isinstance(y, np.ndarray):
         y = pd.Series(y)
 
-    # Separar amostras zero e não-zero
     zero_mask = y == 0
     non_zero_mask = y > 0
 
@@ -73,15 +57,12 @@ def undersample_zeros(X, y, zero_ratio=1.0, random_state=42):
     X_non_zero = X[non_zero_mask]
     y_non_zero = y[non_zero_mask]
 
-    # Calcular quantidade desejada de zeros
     n_non_zero = len(y_non_zero)
     n_zero_desired = int(zero_ratio * n_non_zero)
     n_zero_available = len(y_zero)
 
-    # Garantir que não pediremos mais zeros do que existem
     n_zero_final = min(n_zero_desired, n_zero_available)
 
-    # Fazer undersampling
     X_zero_downsampled, y_zero_downsampled = resample(
         X_zero, y_zero,
         replace=False,
@@ -89,11 +70,9 @@ def undersample_zeros(X, y, zero_ratio=1.0, random_state=42):
         random_state=random_state
     )
 
-    # Concatenar dados balanceados
     X_bal = pd.concat([X_zero_downsampled, X_non_zero], axis=0)
     y_bal = pd.concat([y_zero_downsampled, y_non_zero], axis=0)
 
-    # Embaralhar
     X_bal, y_bal = resample(X_bal, y_bal, random_state=random_state)
 
     return X_bal.reset_index(drop=True), y_bal.reset_index(drop=True)
@@ -102,9 +81,14 @@ def drop_estacoes_vizinhas(abt_estacoes_vizinhas):
     dropped_df = abt_estacoes_vizinhas.drop(['vl_precipitacao_vizinha','vl_correlacao_vizinha','pct_intersecao_precipitacao_vizinha','vl_distancia_km_vizinha','estacao_vizinha_escolhida','vl_prioridade_vizinha'],axis=1)
     return dropped_df
 
-def generate_X_y_train_test(abt_estacoes_vizinhas,usar_estacoes_vizinhas=True,zero_undersampling_ratio = None,smote_oversampling = False,use_bi_model = False,percent_datetime_partitioning_split=0.7):
-    
-    abt = abt_estacoes_vizinhas.copy() if usar_estacoes_vizinhas else drop_estacoes_vizinhas(abt_estacoes_vizinhas)
+def generate_X_y_train_test(abt_estacoes_vizinhas,usar_n_estacoes_vizinhas=0,zero_undersampling_ratio = None,smote_oversampling = False,use_bi_model = False,percent_datetime_partitioning_split=0.7):
+    abt = abt_estacoes_vizinhas[[c for c in abt_estacoes_vizinhas.columns if 'vizinha' not in c]].copy()
+    if usar_n_estacoes_vizinhas > 0:
+        vizinhas_columns_prefix = ['vl_correlacao_estacao_vizinha_{i_vizinha}','pct_intersecao_precipitacao_vizinha_{i_vizinha}','vl_distancia_km_vizinha_{i_vizinha}','vl_prioridade_vizinha_{i_vizinha}','vl_precipitacao_vizinha_{i_vizinha}']
+        for i in range(1, usar_n_estacoes_vizinhas + 1):
+            vizinha_columns = [col.format(i_vizinha=i) for col in vizinhas_columns_prefix]
+            for col in vizinha_columns:
+                abt.loc[:,col] = abt_estacoes_vizinhas[col]
 
     training_abt,validation_abt = particao_por_estacao(abt,percent_datetime_partitioning_split)
         
@@ -140,9 +124,9 @@ def save_model_and_comparison(model,comparison,model_path,comparison_path):
 
 
 
-def train_model(abt_estacoes_vizinhas,Model,model_number,usar_estacoes_vizinhas,zero_undersampling_ratio=None,smote_oversampling=False,use_bi_model=False,threshold_prioridade=0.5,percent_datetime_partitioning_split=0.7,truncate_to_non_negative_target=True):
+def train_model(abt_estacoes_vizinhas,Model,model_number,usar_n_estacoes_vizinhas,zero_undersampling_ratio=None,smote_oversampling=False,use_bi_model=False,threshold_prioridade=0.5,percent_datetime_partitioning_split=0.7,truncate_to_non_negative_target=True):
     if not use_bi_model:
-        X_train,X_test,y_train,y_test = generate_X_y_train_test(abt_estacoes_vizinhas,usar_estacoes_vizinhas=usar_estacoes_vizinhas,zero_undersampling_ratio=zero_undersampling_ratio,smote_oversampling=smote_oversampling,use_bi_model=use_bi_model,percent_datetime_partitioning_split=percent_datetime_partitioning_split)
+        X_train,X_test,y_train,y_test = generate_X_y_train_test(abt_estacoes_vizinhas,usar_n_estacoes_vizinhas=usar_n_estacoes_vizinhas,zero_undersampling_ratio=zero_undersampling_ratio,smote_oversampling=smote_oversampling,use_bi_model=use_bi_model,percent_datetime_partitioning_split=percent_datetime_partitioning_split)
         model = Model()
         model.fit(X_train.drop(['id_estacao','dt_medicao'],axis=1),y_train)
 
@@ -155,7 +139,7 @@ def train_model(abt_estacoes_vizinhas,Model,model_number,usar_estacoes_vizinhas,
         abt,X_train,X_test,y_train,y_test,model,y_pred,comparison = {},{},{},{},{},{},{},{}
         abt['com_vizinha'],abt['sem_vizinha'] = split_com_sem_vizinha(abt_estacoes_vizinhas,threshold_prioridade)
         for tipo in ['com_vizinha','sem_vizinha']:
-            X_train[tipo],X_test[tipo],y_train[tipo],y_test[tipo] = generate_X_y_train_test(abt[tipo],usar_estacoes_vizinhas=usar_estacoes_vizinhas,zero_undersampling_ratio=zero_undersampling_ratio,smote_oversampling=smote_oversampling,use_bi_model=use_bi_model,percent_datetime_partitioning_split=percent_datetime_partitioning_split)
+            X_train[tipo],X_test[tipo],y_train[tipo],y_test[tipo] = generate_X_y_train_test(abt[tipo],usar_n_estacoes_vizinhas=usar_n_estacoes_vizinhas,zero_undersampling_ratio=zero_undersampling_ratio,smote_oversampling=smote_oversampling,use_bi_model=use_bi_model,percent_datetime_partitioning_split=percent_datetime_partitioning_split)
         
         model = {}
         model['com_vizinha'],model['sem_vizinha'] = Model(), Model()
