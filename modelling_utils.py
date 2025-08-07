@@ -2,6 +2,8 @@
 from sklearn.utils import resample
 import pandas as pd
 import numpy as np
+import pickle
+from comparison_utils import compute_comparison_df
 
 
 def get_abt_estacoes_vizinhas(modelling_conn,abt_estacoes_vizinhas_table_name = 'abt_estacoes_vizinhas',create_dt_columns=True):
@@ -99,3 +101,73 @@ def undersample_zeros(X, y, zero_ratio=1.0, random_state=42):
 def drop_estacoes_vizinhas(abt_estacoes_vizinhas):
     dropped_df = abt_estacoes_vizinhas.drop(['vl_precipitacao_vizinha','vl_correlacao_vizinha','pct_intersecao_precipitacao_vizinha','vl_distancia_km_vizinha','estacao_vizinha_escolhida','vl_prioridade_vizinha'],axis=1)
     return dropped_df
+
+def generate_X_y_train_test(abt_estacoes_vizinhas,usar_estacoes_vizinhas=True,zero_undersampling_ratio = None,smote_oversampling = False,use_bi_model = False,percent_datetime_partitioning_split=0.7):
+    
+    abt = abt_estacoes_vizinhas.copy() if usar_estacoes_vizinhas else drop_estacoes_vizinhas(abt_estacoes_vizinhas)
+
+    training_abt,validation_abt = particao_por_estacao(abt,percent_datetime_partitioning_split)
+        
+    X_train,y_train = training_abt.drop('vl_precipitacao',axis=1),training_abt['vl_precipitacao']
+    X_test,y_test = validation_abt.drop('vl_precipitacao',axis=1),validation_abt['vl_precipitacao']
+
+    if not zero_undersampling_ratio is None:
+        X_train, y_train = undersample_zeros(X_train, y_train, zero_ratio=zero_undersampling_ratio)
+
+    if smote_oversampling:
+        pass
+
+    if use_bi_model:
+        pass
+    return X_train,X_test,y_train,y_test
+
+
+
+def import_model_and_comparison(model_path,comparison_path):
+    with open(model_path, 'rb') as f:
+        model = pickle.load(f)
+    with open(comparison_path,'rb') as f:
+        comparison = pickle.load(f)
+    return model,comparison
+
+def save_model_and_comparison(model,comparison,model_path,comparison_path):
+    with open(model_path,'wb') as f:
+        pickle.dump(model,f)
+    with open(comparison_path,'wb') as f:
+        pickle.dump(comparison,f)
+    return 
+
+
+
+
+def train_model(abt_estacoes_vizinhas,Model,model_number,usar_estacoes_vizinhas,zero_undersampling_ratio=None,smote_oversampling=False,use_bi_model=False,threshold_prioridade=0.5,percent_datetime_partitioning_split=0.7,truncate_to_non_negative_target=True):
+    if not use_bi_model:
+        X_train,X_test,y_train,y_test = generate_X_y_train_test(abt_estacoes_vizinhas,usar_estacoes_vizinhas=usar_estacoes_vizinhas,zero_undersampling_ratio=zero_undersampling_ratio,smote_oversampling=smote_oversampling,use_bi_model=use_bi_model,percent_datetime_partitioning_split=percent_datetime_partitioning_split)
+        model = Model()
+        model.fit(X_train.drop(['id_estacao','dt_medicao'],axis=1),y_train)
+
+        y_pred = model.predict(X_test.drop(['id_estacao','dt_medicao'],axis=1))
+        if truncate_to_non_negative_target: 
+            y_pred = np.clip(y_pred, a_min=0, a_max=None)
+        comparison = compute_comparison_df(X_test,y_test,y_pred)
+
+    elif use_bi_model:
+        abt,X_train,X_test,y_train,y_test,model,y_pred,comparison = {},{},{},{},{},{},{},{}
+        abt['com_vizinha'],abt['sem_vizinha'] = split_com_sem_vizinha(abt_estacoes_vizinhas,threshold_prioridade)
+        for tipo in ['com_vizinha','sem_vizinha']:
+            X_train[tipo],X_test[tipo],y_train[tipo],y_test[tipo] = generate_X_y_train_test(abt[tipo],usar_estacoes_vizinhas=usar_estacoes_vizinhas,zero_undersampling_ratio=zero_undersampling_ratio,smote_oversampling=smote_oversampling,use_bi_model=use_bi_model,percent_datetime_partitioning_split=percent_datetime_partitioning_split)
+        
+        model = {}
+        model['com_vizinha'],model['sem_vizinha'] = Model(), Model()
+        for tipo in ['com_vizinha','sem_vizinha']:
+            model[tipo].fit(X_train[tipo].drop(['id_estacao','dt_medicao'],axis=1),y_train[tipo])
+        for tipo in ['com_vizinha','sem_vizinha']:
+            y_pred[tipo] = model[tipo].predict(X_test[tipo].drop(['id_estacao','dt_medicao'],axis=1))
+            if truncate_to_non_negative_target:
+                y_pred[tipo] = np.clip(y_pred[tipo], a_min=0, a_max=None)
+            comparison[tipo] = compute_comparison_df(X_test[tipo],y_test[tipo],y_pred[tipo])
+
+    model_path,comparison_path = f'models/model_{model_number}.pkl',f'comparisons/comparison_{model_number}.pkl'
+    save_model_and_comparison(model,comparison,model_path,comparison_path)
+    
+    return model,comparison

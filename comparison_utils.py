@@ -42,7 +42,6 @@ def plot_model_metrics(metrics_df, metric_names):
         ax.set_axisbelow(True)
         ax.legend_.remove()
 
-        # Adiciona rótulos com caixinha em cima de cada barra
         for container in plot.containers:
             for bar in container:
                 height = bar.get_height()
@@ -63,7 +62,6 @@ def plot_model_metrics(metrics_df, metric_names):
                         )
                     )
 
-    # Remove eixos extras se não forem usados
     for j in range(i + 1, len(axes)):
         fig.delaxes(axes[j])
 
@@ -92,7 +90,10 @@ def compute_metrics(y_test,y_pred,relative_error_threshold = 0.2,absolute_error_
     
     
 def compute_comparison_df(X_test,y_test,y_pred):
-    comparison = X_test[['id_estacao','latitude','longitude','dt_medicao','vl_prioridade_vizinha']].copy()
+    if 'vl_prioridade_vizinha' not in X_test.columns:
+        comparison = X_test[['id_estacao','latitude','longitude','dt_medicao']].copy()
+    else:
+        comparison = X_test[['id_estacao','latitude','longitude','dt_medicao','vl_prioridade_vizinha']].copy()
     comparison.loc[:,'y_test'] = y_test.copy()
     comparison.loc[:,'y_pred'] = y_pred.copy()
     return comparison
