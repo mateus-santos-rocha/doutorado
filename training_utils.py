@@ -1,4 +1,3 @@
-
 from modelling_utils.model_management import save_model_and_comparison
 from modelling_utils.sampling import undersample_zeros,smoteR
 from modelling_utils.preprocessing import split_com_sem_vizinha,particao_por_estacao
@@ -7,13 +6,15 @@ from tqdm.notebook import tqdm
 import pandas as pd
 import warnings
 warnings.filterwarnings('ignore')
+import numpy as np
+import os
 
 def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0, 
                            zero_undersampling_ratio=None, smote_oversampling=False, 
                            smote_threshold=0.5, smote_pct_oversampling=100, 
                            smote_pct_undersampling=100, smote_k_neighbors=5,
                            smote_constraint_columns=None, smote_relevance_function=None,
-                           use_bi_model=False, percent_datetime_partitioning_split=0.7,
+                           percent_datetime_partitioning_split=0.7,
                            random_state=None):
     """
     Gera conjuntos de treino e teste a partir de dados de estações meteorológicas.
@@ -34,8 +35,13 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
         dados de estações vizinhas. Deve ser >= 0.
         
     zero_undersampling_ratio : float, optional, default=None
-        Proporção para undersampling de valores zero na variável target.
-        Se None, não aplica undersampling. Deve estar entre 0 e 1.
+        Proporção de registros com precipitação zero em relação aos registros
+        com precipitação > 0 no conjunto de treino. Se None, não aplica undersampling.
+        Exemplos:
+        - 1.0: mantém mesmo número de zeros e não-zeros (balanceamento 50/50)
+        - 0.5: mantém metade de zeros em relação aos não-zeros
+        - 2.0: mantém o dobro de zeros em relação aos não-zeros
+        Deve ser > 0.
         
     smote_oversampling : bool, optional, default=False
         Se True, aplica técnica SMOTE-R para oversampling de casos raros.
@@ -59,9 +65,6 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
     smote_relevance_function : callable, optional, default=None
         Função customizada que determina a relevância de uma observação no SMOTE-R.
         Se None, usa função padrão baseada na distância da mediana.
-        
-    use_bi_model : bool, optional, default=False
-        Se True, configura para modelo binário (não implementado).
         
     percent_datetime_partitioning_split : float, optional, default=0.7
         Percentual dos dados para treino na partição temporal.
@@ -96,14 +99,28 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
     >>> # Uso básico sem estações vizinhas
     >>> X_train, X_test, y_train, y_test = generate_X_y_train_test(df_estacoes)
     
-    >>> # Incluindo 3 estações vizinhas com undersampling e SMOTE-R
+    >>> # Balanceamento 50/50 (mesmo número de zeros e não-zeros)
+    >>> X_train, X_test, y_train, y_test = generate_X_y_train_test(
+    ...     df_estacoes, 
+    ...     zero_undersampling_ratio=1.0,
+    ...     random_state=42
+    ... )
+    
+    >>> # Incluindo 3 estações vizinhas com menos zeros que não-zeros
     >>> X_train, X_test, y_train, y_test = generate_X_y_train_test(
     ...     df_estacoes, 
     ...     usar_n_estacoes_vizinhas=3,
-    ...     zero_undersampling_ratio=0.3,
+    ...     zero_undersampling_ratio=0.5,  # metade de zeros em relação aos não-zeros
     ...     smote_oversampling=True,
     ...     smote_threshold=0.6,
     ...     smote_constraint_columns=['dt_medicao'],
+    ...     random_state=42
+    ... )
+    
+    >>> # Mantendo mais zeros que não-zeros
+    >>> X_train, X_test, y_train, y_test = generate_X_y_train_test(
+    ...     df_estacoes, 
+    ...     zero_undersampling_ratio=2.0,  # dobro de zeros em relação aos não-zeros
     ...     random_state=42
     ... )
     
@@ -112,7 +129,7 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
     - A função assume que existe uma função `particao_por_estacao` disponível
     - A função assume que existe uma função `undersample_zeros` disponível
     - A função assume que existe uma função `smoteR` disponível quando smote_oversampling=True
-    - A opção use_bi_model está preparada para implementação futura
+    - O undersampling é aplicado apenas no conjunto de treino, não afetando o conjunto de teste
     """
     
     
@@ -121,8 +138,8 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
             raise ValueError("usar_n_estacoes_vizinhas deve ser um inteiro >= 0")
         
         if zero_undersampling_ratio is not None:
-            if not isinstance(zero_undersampling_ratio, (int, float)) or not (0 <= zero_undersampling_ratio <= 1):
-                raise ValueError("zero_undersampling_ratio deve ser None ou um número entre 0 e 1")
+            if not isinstance(zero_undersampling_ratio, (int, float)) or zero_undersampling_ratio <= 0:
+                raise ValueError("zero_undersampling_ratio deve ser None ou um número > 0")
         
         if not isinstance(percent_datetime_partitioning_split, (int, float)) or not (0 < percent_datetime_partitioning_split < 1):
             raise ValueError("percent_datetime_partitioning_split deve ser um número entre 0 e 1")
@@ -192,10 +209,22 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
 
         if zero_undersampling_ratio is not None:
             print(f"⚖️  Aplicando undersampling com ratio {zero_undersampling_ratio}...")
+            print(f"    💡 Isso significa: {zero_undersampling_ratio} zeros para cada 1 não-zero")
             try:
                 original_size = len(X_train)
-                X_train, y_train = undersample_zeros(X_train, y_train, zero_ratio=zero_undersampling_ratio)
-                print(f"📉 Tamanho reduzido de {original_size} para {len(X_train)} registros")
+                zeros_before = (y_train == 0).sum()
+                non_zeros_before = (y_train > 0).sum()
+                
+                X_train, y_train = undersample_zeros(X_train, y_train, zero_ratio=zero_undersampling_ratio, random_state=random_state)
+                
+                zeros_after = (y_train == 0).sum()
+                non_zeros_after = (y_train > 0).sum()
+                actual_ratio = zeros_after / non_zeros_after if non_zeros_after > 0 else 0
+                
+                print(f"📉 Antes: {zeros_before:,} zeros, {non_zeros_before:,} não-zeros")
+                print(f"📊 Depois: {zeros_after:,} zeros, {non_zeros_after:,} não-zeros")
+                print(f"📈 Ratio real: {actual_ratio:.2f} | Tamanho: {original_size} → {len(X_train)}")
+                
             except Exception as e:
                 raise RuntimeError(f"Erro no undersampling: {e}")
 
@@ -225,9 +254,6 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
             except Exception as e:
                 print(f"❌ Erro na aplicação do SMOTE-R: {e}")
                 print("   Continuando com dataset não balanceado...")
-
-        if use_bi_model:
-            print("⚠️  Modelo binário não implementado ainda")
         
         print(f"\n📋 Resumo final:")
         print(f"   • Features de treino: {X_train.shape}")
@@ -250,6 +276,7 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
     except Exception as e:
         print(f"❌ Erro inesperado: {e}")
         raise RuntimeError(f"Erro inesperado durante o processamento: {e}")
+    
 
 def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizinhas,
                 zero_undersampling_ratio=None, smote_oversampling=False, 
@@ -284,8 +311,13 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
         Número de estações vizinhas a incluir no dataset. Deve ser >= 0.
         
     zero_undersampling_ratio : float, optional, default=None
-        Proporção para undersampling de valores zero na variável target.
-        Se None, não aplica undersampling. Deve estar entre 0 e 1.
+        Proporção de registros com precipitação zero em relação aos registros
+        com precipitação > 0 no conjunto de treino. Se None, não aplica undersampling.
+        Exemplos:
+        - 1.0: mantém mesmo número de zeros e não-zeros (balanceamento 50/50)
+        - 0.5: mantém metade de zeros em relação aos não-zeros
+        - 2.0: mantém o dobro de zeros em relação aos não-zeros
+        Deve ser > 0.
         
     smote_oversampling : bool, optional, default=False
         Se True, aplica técnica SMOTE-R para balanceamento de target contínuo.
@@ -365,16 +397,25 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
     ...     usar_n_estacoes_vizinhas=2
     ... )
     
-    >>> # Bi-model com SMOTE-R e restrições temporais
+    >>> # Balanceamento 50/50 (mesmo número de zeros e não-zeros)
+    >>> model, comparison = train_model(
+    ...     df_estacoes, 
+    ...     RandomForestRegressor, 
+    ...     model_number=2,
+    ...     usar_n_estacoes_vizinhas=2,
+    ...     zero_undersampling_ratio=1.0
+    ... )
+    
+    >>> # Bi-model com SMOTE-R e menos zeros que não-zeros
     >>> model, comparison = train_model(
     ...     df_estacoes,
     ...     RandomForestRegressor,
-    ...     model_number=2,
+    ...     model_number=3,
     ...     usar_n_estacoes_vizinhas=3,
     ...     use_bi_model=True,
     ...     smote_oversampling=True,
     ...     smote_constraint_columns=['dt_medicao'],
-    ...     zero_undersampling_ratio=0.3,
+    ...     zero_undersampling_ratio=0.5,  # metade de zeros em relação aos não-zeros
     ...     threshold_prioridade=0.6
     ... )
     
@@ -385,10 +426,8 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
       compute_comparison_df, save_model_and_comparison
     - Para bi-model, os dados são separados baseado na prioridade das estações vizinhas
     - Predições negativas são truncadas para 0 por padrão (precipitação física)
+    - O undersampling é aplicado apenas no conjunto de treino, não afetando o conjunto de teste
     """
-    import numpy as np
-    from tqdm.notebook import tqdm
-    import os
     
     try:
         # Validação de parâmetros
@@ -399,8 +438,8 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
             raise ValueError("usar_n_estacoes_vizinhas deve ser um inteiro >= 0")
         
         if zero_undersampling_ratio is not None:
-            if not isinstance(zero_undersampling_ratio, (int, float)) or not (0 <= zero_undersampling_ratio <= 1):
-                raise ValueError("zero_undersampling_ratio deve ser None ou um número entre 0 e 1")
+            if not isinstance(zero_undersampling_ratio, (int, float)) or zero_undersampling_ratio <= 0:
+                raise ValueError("zero_undersampling_ratio deve ser None ou um número > 0")
         
         if not isinstance(threshold_prioridade, (int, float)) or not (0 <= threshold_prioridade <= 1):
             raise ValueError("threshold_prioridade deve ser um número entre 0 e 1")
@@ -426,6 +465,8 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
         print(f"🏗️  Modelo: {Model.__name__}")
         print(f"🌐 Estações vizinhas: {usar_n_estacoes_vizinhas}")
         print(f"🔄 Tipo de modelo: {'Bi-model' if use_bi_model else 'Modelo único'}")
+        if zero_undersampling_ratio is not None:
+            print(f"⚖️  Zero undersampling ratio: {zero_undersampling_ratio} (zeros por não-zero)")
         
         if not use_bi_model:
             print("\n=== TREINAMENTO MODELO ÚNICO ===")
@@ -443,8 +484,9 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
                     smote_pct_undersampling=smote_pct_undersampling,
                     smote_k_neighbors=smote_k_neighbors,
                     smote_constraint_columns=smote_constraint_columns,
-                    random_state=smote_random_state,
-                    percent_datetime_partitioning_split=percent_datetime_partitioning_split
+                    smote_relevance_function=None,
+                    percent_datetime_partitioning_split=percent_datetime_partitioning_split,
+                    random_state=smote_random_state
                 )
             except Exception as e:
                 raise RuntimeError(f"Erro na preparação dos dados: {e}")
@@ -526,7 +568,14 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
                         usar_n_estacoes_vizinhas=usar_n_estacoes_vizinhas,
                         zero_undersampling_ratio=zero_undersampling_ratio,
                         smote_oversampling=smote_oversampling,
-                        percent_datetime_partitioning_split=percent_datetime_partitioning_split
+                        smote_threshold=smote_threshold,
+                        smote_pct_oversampling=smote_pct_oversampling,
+                        smote_pct_undersampling=smote_pct_undersampling,
+                        smote_k_neighbors=smote_k_neighbors,
+                        smote_constraint_columns=smote_constraint_columns,
+                        smote_relevance_function=None,
+                        percent_datetime_partitioning_split=percent_datetime_partitioning_split,
+                        random_state=smote_random_state
                     )
                 except Exception as e:
                     raise RuntimeError(f"Erro na preparação dos dados para '{tipo}': {e}")
