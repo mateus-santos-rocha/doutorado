@@ -11,13 +11,16 @@ from sklearn.utils import resample
 
 warnings.filterwarnings('ignore')
 
+def relevance_function(y):
+    y_0 = 10
+    return 1 / (1 + np.exp(-(y - y_0)))  # sigmoid normalizada entre 0 e 1
+
 def generate_synthetic_cases_with_target_smoter(dataframe, target_column, explanatory_variables, 
-                                               oversampling_ratio, num_neighbors, constraint_columns=None):
+                                               oversampling_ratio, num_neighbors):
     """
     Função auxiliar para gerar casos sintéticos otimizada para SMOTE-R
     
     Parâmetros adicionais:
-    - constraint_columns: Lista de colunas que devem ter valores iguais entre vizinhos
     """
     
     synthetic_cases = []
@@ -103,7 +106,7 @@ def generate_synthetic_cases_with_target_smoter(dataframe, target_column, explan
 
 
 def smoteR(dataframe, target_column, explanatory_variables=None, 
-           relevance_function=None, threshold=0.5, pct_oversampling=100, 
+           relevance_function=relevance_function, threshold=0.5, pct_oversampling=100, 
            pct_undersampling=100, number_of_nearest_neighbors=5, 
            constraint_columns=None, random_state=None):
     """
@@ -184,11 +187,9 @@ def smoteR(dataframe, target_column, explanatory_variables=None,
             median_value = dataframe[target_column].median()
             mad_value = np.median(np.abs(dataframe[target_column] - median_value))
             
-            def default_relevance_function(x):
-                """Função de relevância baseada na distância do percentil 50"""
-                if mad_value == 0:
-                    return 0.5  # Se MAD é 0, todos os valores são iguais
-                return abs(x - median_value) / (mad_value * 1.4826)  # Fator de escala para normalização
+            def default_relevance_function(y):
+                y_0 = 10
+                return 1 / (1 + np.exp(-(y - y_0)))
             
             relevance_function = default_relevance_function
             print(f"   Usando função de relevância padrão (mediana: {median_value:.3f}, MAD: {mad_value:.3f})")

@@ -14,6 +14,7 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
                            smote_threshold=0.5, smote_pct_oversampling=100, 
                            smote_pct_undersampling=100, smote_k_neighbors=5,
                            smote_constraint_columns=None, smote_relevance_function=None,
+                           smote_explanatory_variables=None,
                            percent_datetime_partitioning_split=0.7,
                            random_state=None):
     """
@@ -236,7 +237,7 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
                 balanced_training = smoteR(
                     dataframe=training_combined,
                     target_column='vl_precipitacao',
-                    explanatory_variables=list(X_train.columns),
+                    explanatory_variables=smote_explanatory_variables,
                     relevance_function=smote_relevance_function,
                     threshold=smote_threshold,
                     pct_oversampling=smote_pct_oversampling,
