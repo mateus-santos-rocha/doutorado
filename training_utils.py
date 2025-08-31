@@ -11,8 +11,8 @@ import os
 
 def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0, 
                            zero_undersampling_ratio=None, smote_oversampling=False, 
-                           smote_threshold=0.5, smote_pct_oversampling=100, 
-                           smote_pct_undersampling=100, smote_k_neighbors=5,
+                           smote_threshold=0.5, smote_pct_oversampling=0.01, 
+                           smote_pct_undersampling=1.0, smote_k_neighbors=5,
                            smote_constraint_columns=None, smote_relevance_function=None,
                            smote_explanatory_variables=None,
                            percent_datetime_partitioning_split=0.7,
@@ -50,11 +50,13 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
     smote_threshold : float, optional, default=0.5
         Limiar para determinar observações raras vs comuns no SMOTE-R.
         
-    smote_pct_oversampling : int, optional, default=100
-        Porcentagem de oversampling para casos raros no SMOTE-R.
+    smote_pct_oversampling : float, optional, default=0.01
+        Porcentagem decimal de aumento nos casos raros (0.01 = 1%, 0.50 = 50%)
+        Exemplo: 100 casos raros com smote_pct_oversampling=0.01 → 1 caso sintético
         
-    smote_pct_undersampling : int, optional, default=100
-        Porcentagem de undersampling para casos comuns no SMOTE-R.
+    smote_pct_undersampling : float, optional, default=1.0
+        Multiplicador para casos comuns em relação ao total de casos raros + sintéticos
+        (1.0 = mesmo número, 0.5 = metade, 2.0 = dobro)
         
     smote_k_neighbors : int, optional, default=5
         Número de vizinhos mais próximos para geração sintética no SMOTE-R.
@@ -107,21 +109,25 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
     ...     random_state=42
     ... )
     
-    >>> # Incluindo 3 estações vizinhas com menos zeros que não-zeros
+    >>> # Incluindo 3 estações vizinhas com SMOTE-R (1% de aumento)
     >>> X_train, X_test, y_train, y_test = generate_X_y_train_test(
     ...     df_estacoes, 
     ...     usar_n_estacoes_vizinhas=3,
     ...     zero_undersampling_ratio=0.5,  # metade de zeros em relação aos não-zeros
     ...     smote_oversampling=True,
     ...     smote_threshold=0.6,
+    ...     smote_pct_oversampling=0.01,  # 1% de aumento nos casos raros
     ...     smote_constraint_columns=['dt_medicao'],
     ...     random_state=42
     ... )
     
-    >>> # Mantendo mais zeros que não-zeros
+    >>> # SMOTE-R com 50% de aumento nos casos raros
     >>> X_train, X_test, y_train, y_test = generate_X_y_train_test(
     ...     df_estacoes, 
     ...     zero_undersampling_ratio=2.0,  # dobro de zeros em relação aos não-zeros
+    ...     smote_oversampling=True,
+    ...     smote_pct_oversampling=0.50,  # 50% de aumento
+    ...     smote_pct_undersampling=0.8,   # 80% de casos comuns em relação aos raros+sintéticos
     ...     random_state=42
     ... )
     
@@ -131,6 +137,7 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
     - A função assume que existe uma função `undersample_zeros` disponível
     - A função assume que existe uma função `smoteR` disponível quando smote_oversampling=True
     - O undersampling é aplicado apenas no conjunto de treino, não afetando o conjunto de teste
+    - smote_pct_oversampling agora é uma porcentagem decimal (0.01 = 1% de aumento)
     """
     
     
@@ -148,11 +155,16 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
         if not isinstance(smote_threshold, (int, float)) or not (0 <= smote_threshold <= 1):
             raise ValueError("smote_threshold deve ser um número entre 0 e 1")
         
-        if not isinstance(smote_pct_oversampling, int) or smote_pct_oversampling < 0:
-            raise ValueError("smote_pct_oversampling deve ser um inteiro >= 0")
+        # MUDANÇA: Validação para smote_pct_oversampling como decimal
+        if not isinstance(smote_pct_oversampling, (int, float)) or smote_pct_oversampling < 0:
+            raise ValueError("smote_pct_oversampling deve ser um número >= 0 (ex: 0.01 para 1%)")
         
-        if not isinstance(smote_pct_undersampling, int) or smote_pct_undersampling < 0:
-            raise ValueError("smote_pct_undersampling deve ser um inteiro >= 0")
+        if smote_pct_oversampling > 10.0:
+            print(f"⚠️  Aviso: smote_pct_oversampling muito alto ({smote_pct_oversampling*100:.1f}%). Considere usar valores menores.")
+        
+        # MUDANÇA: Validação para smote_pct_undersampling como multiplicador
+        if not isinstance(smote_pct_undersampling, (int, float)) or smote_pct_undersampling < 0:
+            raise ValueError("smote_pct_undersampling deve ser um número >= 0")
         
         if not isinstance(smote_k_neighbors, int) or smote_k_neighbors < 1:
             raise ValueError("smote_k_neighbors deve ser um inteiro >= 1")
@@ -231,6 +243,8 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
 
         if smote_oversampling:
             print(f"🧬 Aplicando SMOTE-R com threshold={smote_threshold}...")
+            print(f"    📈 Oversampling: {smote_pct_oversampling*100:.2f}% de aumento nos casos raros")
+            print(f"    ⚖️  Undersampling: multiplicador {smote_pct_undersampling} para casos comuns")
             try:
                 training_combined = pd.concat([X_train, y_train], axis=1)
                 
@@ -244,8 +258,7 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
                     pct_undersampling=smote_pct_undersampling,
                     number_of_nearest_neighbors=smote_k_neighbors,
                     constraint_columns=smote_constraint_columns,
-                    random_state=random_state
-                )
+                    random_state=random_state)
                 
                 X_train = balanced_training.drop('vl_precipitacao', axis=1)
                 y_train = balanced_training['vl_precipitacao']
@@ -281,8 +294,8 @@ def generate_X_y_train_test(abt_estacoes_vizinhas, usar_n_estacoes_vizinhas=0,
 
 def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizinhas,
                 zero_undersampling_ratio=None, smote_oversampling=False, 
-                smote_threshold=0.5, smote_pct_oversampling=100,
-                smote_pct_undersampling=100, smote_k_neighbors=5,
+                smote_threshold=0.5, smote_pct_oversampling=0.01,
+                smote_pct_undersampling=1.0, smote_k_neighbors=5,smote_explanatory_variables=None,
                 smote_constraint_columns=None, smote_random_state=None,
                 use_bi_model=False, threshold_prioridade=0.5, 
                 percent_datetime_partitioning_split=0.7,
@@ -326,11 +339,13 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
     smote_threshold : float, optional, default=0.5
         Limiar para determinar observações raras vs comuns no SMOTE-R.
         
-    smote_pct_oversampling : int, optional, default=100
-        Porcentagem de oversampling para casos raros no SMOTE-R.
+    smote_pct_oversampling : float, optional, default=0.01
+        Porcentagem decimal de aumento nos casos raros (0.01 = 1%, 0.50 = 50%)
+        Exemplo: 100 casos raros com smote_pct_oversampling=0.01 → 1 caso sintético
         
-    smote_pct_undersampling : int, optional, default=100
-        Porcentagem de undersampling para casos comuns no SMOTE-R.
+    smote_pct_undersampling : float, optional, default=1.0
+        Multiplicador para casos comuns em relação ao total de casos raros + sintéticos
+        (1.0 = mesmo número, 0.5 = metade, 2.0 = dobro)
         
     smote_k_neighbors : int, optional, default=5
         Número de vizinhos mais próximos para geração sintética no SMOTE-R.
@@ -407,7 +422,7 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
     ...     zero_undersampling_ratio=1.0
     ... )
     
-    >>> # Bi-model com SMOTE-R e menos zeros que não-zeros
+    >>> # Bi-model com SMOTE-R (1% de aumento nos casos raros)
     >>> model, comparison = train_model(
     ...     df_estacoes,
     ...     RandomForestRegressor,
@@ -417,7 +432,20 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
     ...     smote_oversampling=True,
     ...     smote_constraint_columns=['dt_medicao'],
     ...     zero_undersampling_ratio=0.5,  # metade de zeros em relação aos não-zeros
+    ...     smote_pct_oversampling=0.01,   # 1% de aumento nos casos raros
+    ...     smote_pct_undersampling=0.8,   # 80% de casos comuns em relação aos raros+sintéticos
     ...     threshold_prioridade=0.6
+    ... )
+    
+    >>> # Modelo com 50% de aumento nos casos raros
+    >>> model, comparison = train_model(
+    ...     df_estacoes,
+    ...     RandomForestRegressor,
+    ...     model_number=4,
+    ...     usar_n_estacoes_vizinhas=2,
+    ...     smote_oversampling=True,
+    ...     smote_pct_oversampling=0.50,   # 50% de aumento
+    ...     smote_pct_undersampling=2.0    # dobro de casos comuns
     ... )
     
     Notes
@@ -428,6 +456,8 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
     - Para bi-model, os dados são separados baseado na prioridade das estações vizinhas
     - Predições negativas são truncadas para 0 por padrão (precipitação física)
     - O undersampling é aplicado apenas no conjunto de treino, não afetando o conjunto de teste
+    - smote_pct_oversampling agora é uma porcentagem decimal (0.01 = 1% de aumento)
+    - smote_pct_undersampling agora é um multiplicador direto (1.0 = mesmo número)
     """
     
     try:
@@ -441,6 +471,17 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
         if zero_undersampling_ratio is not None:
             if not isinstance(zero_undersampling_ratio, (int, float)) or zero_undersampling_ratio <= 0:
                 raise ValueError("zero_undersampling_ratio deve ser None ou um número > 0")
+        
+        # MUDANÇA: Validação para smote_pct_oversampling como decimal
+        if not isinstance(smote_pct_oversampling, (int, float)) or smote_pct_oversampling < 0:
+            raise ValueError("smote_pct_oversampling deve ser um número >= 0 (ex: 0.01 para 1%)")
+        
+        if smote_pct_oversampling > 10.0:
+            print(f"⚠️  Aviso: smote_pct_oversampling muito alto ({smote_pct_oversampling*100:.1f}%). Considere usar valores menores.")
+        
+        # MUDANÇA: Validação para smote_pct_undersampling como multiplicador
+        if not isinstance(smote_pct_undersampling, (int, float)) or smote_pct_undersampling < 0:
+            raise ValueError("smote_pct_undersampling deve ser um número >= 0")
         
         if not isinstance(threshold_prioridade, (int, float)) or not (0 <= threshold_prioridade <= 1):
             raise ValueError("threshold_prioridade deve ser um número entre 0 e 1")
@@ -468,6 +509,8 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
         print(f"🔄 Tipo de modelo: {'Bi-model' if use_bi_model else 'Modelo único'}")
         if zero_undersampling_ratio is not None:
             print(f"⚖️  Zero undersampling ratio: {zero_undersampling_ratio} (zeros por não-zero)")
+        if smote_oversampling:
+            print(f"🧬 SMOTE-R: oversampling {smote_pct_oversampling*100:.2f}%, undersampling multiplicador {smote_pct_undersampling}")
         
         if not use_bi_model:
             print("\n=== TREINAMENTO MODELO ÚNICO ===")
@@ -484,6 +527,7 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
                     smote_pct_oversampling=smote_pct_oversampling,
                     smote_pct_undersampling=smote_pct_undersampling,
                     smote_k_neighbors=smote_k_neighbors,
+                    smote_explanatory_variables=smote_explanatory_variables,
                     smote_constraint_columns=smote_constraint_columns,
                     smote_relevance_function=None,
                     percent_datetime_partitioning_split=percent_datetime_partitioning_split,
@@ -575,6 +619,7 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
                         smote_k_neighbors=smote_k_neighbors,
                         smote_constraint_columns=smote_constraint_columns,
                         smote_relevance_function=None,
+                        smote_explanatory_variables=smote_explanatory_variables,
                         percent_datetime_partitioning_split=percent_datetime_partitioning_split,
                         random_state=smote_random_state
                     )
