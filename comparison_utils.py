@@ -40,7 +40,8 @@ def plot_model_metrics(metrics_df, metric_names):
         ax.set_ylabel(metric)
         ax.grid(True, which='major', axis='y', linestyle='--', linewidth=0.5)
         ax.set_axisbelow(True)
-        ax.legend_.remove()
+        if ax.get_legend() is not None:
+            ax.get_legend().remove()
 
         for container in plot.containers:
             for bar in container:
