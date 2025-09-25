@@ -8,13 +8,22 @@ from shapely.geometry import Point
 import pandas as pd
 
 
-def plot_model_metrics(metrics_df, metric_names):
+def plot_model_metrics(metrics_df, metric_names, x_rotation=45):
     """
     Plota gráficos de barras lado a lado comparando métricas entre diferentes modelos.
     Cada barra recebe um rótulo com valor dentro de uma caixa discreta.
+    
+    Parameters:
+    -----------
+    metrics_df : pd.DataFrame
+        DataFrame contendo as métricas dos modelos
+    metric_names : list
+        Lista com os nomes das métricas a serem plotadas
+    x_rotation : int or float, default=45
+        Ângulo de rotação dos rótulos do eixo x em graus
     """
     num_metrics = len(metric_names)
-    cols = 4
+    cols = 2
     rows = math.ceil(num_metrics / cols)
 
     fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
@@ -42,6 +51,8 @@ def plot_model_metrics(metrics_df, metric_names):
         ax.set_axisbelow(True)
         if ax.get_legend() is not None:
             ax.get_legend().remove()
+
+        ax.tick_params(axis='x', rotation=x_rotation)
 
         for container in plot.containers:
             for bar in container:
@@ -76,7 +87,7 @@ def import_model_and_comparison(model_path,comparison_path):
         comparison = pickle.load(f)
     return model,comparison
 
-def compute_metrics(y_test,y_pred,relative_error_threshold = 0.2,absolute_error_threshold = 10,min_sem_chuva = 1,min_relevancia = 0.5,beta = 1,minimo_muita_chuva = 20):
+def compute_metrics(y_test,y_pred,relative_error_threshold = 0.2,absolute_error_threshold_PCC = 5,absolute_error_threshold_PMC = 10,min_sem_chuva = 1,min_relevancia = 0.5,beta = 1,minimo_muita_chuva = 20):
     metrics = {
         'precision':precision(y_test,y_pred,error_threshold=relative_error_threshold,min_relevancia=min_relevancia),
         'recall':recall(y_test,y_pred,error_threshold=relative_error_threshold,min_relevancia=min_relevancia),
@@ -85,8 +96,8 @@ def compute_metrics(y_test,y_pred,relative_error_threshold = 0.2,absolute_error_
         'R2':R2_determinacao(y_test,y_pred),
         'MAE':MAE(y_test,y_pred),
         'PSC_A':PSC_A(y_test,y_pred,erro=min_sem_chuva),
-        'PCC_A':PCC_A(y_test,y_pred,erro=absolute_error_threshold),
-        'PMC_A':PMC_A(y_test,y_pred,erro=absolute_error_threshold,chuva_minima=minimo_muita_chuva)}
+        'PCC_A':PCC_A(y_test,y_pred,erro=absolute_error_threshold_PCC),
+        'PMC_A':PMC_A(y_test,y_pred,erro=absolute_error_threshold_PMC,chuva_minima=minimo_muita_chuva)}
     return metrics
     
     
@@ -272,3 +283,54 @@ def plot_model_prediction_vs_observation(comparison_df, model_number, id_estacao
 
 
 
+def plot_feature_importance(model, top_n=10, figsize=(10, 6), title=None):
+    """
+    Plota as N features mais importantes usando seaborn.
+    
+    Parameters:
+    -----------
+    model : sklearn model
+        Modelo treinado com atributos feature_names_in_ e feature_importances_
+    top_n : int
+        Número de features mais importantes para plotar
+    figsize : tuple
+        Tamanho da figura (largura, altura)
+    title : str
+        Título do gráfico
+    
+    Returns:
+    --------
+    matplotlib.figure.Figure
+        Figura do matplotlib
+    """
+    feature_dict = dict(zip(model.feature_names_in_, model.feature_importances_))
+    
+    df_importance = pd.DataFrame([
+        {'feature': feature, 'importance': importance} 
+        for feature, importance in feature_dict.items()
+    ])
+    
+    df_top = df_importance.nlargest(top_n, 'importance')
+    
+    plt.figure(figsize=figsize)
+    
+    ax = sns.barplot(
+        data=df_top, 
+        x='importance', 
+        y='feature',
+        palette='viridis'
+    )
+    
+    if title is None:
+        title = f'Top {top_n} Features - Importância do Modelo'
+    
+    plt.title(title, fontsize=14, fontweight='bold')
+    plt.xlabel('Importância', fontsize=12)
+    plt.ylabel('Features', fontsize=12)
+    
+    for i, v in enumerate(df_top['importance']):
+        ax.text(v + 0.001, i, f'{v:.3f}', va='center', fontsize=10)
+    
+    plt.tight_layout()
+    
+    return plt.gcf()

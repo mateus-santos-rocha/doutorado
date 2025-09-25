@@ -1,6 +1,10 @@
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import pandas as pd
+import numpy as np
+import seaborn as sns
+from scipy import stats
 
 def plotar_estacoes_mapa(df, markersize=1, markercolor='blue', 
                          xlim=(-54, -37), ylim=(-25, -16), 
@@ -52,3 +56,61 @@ def plotar_estacoes_mapa(df, markersize=1, markercolor='blue',
     plt.xlabel('Longitude')
     plt.ylabel('Latitude')
     plt.show()
+
+
+def plot_distance_correlation(df, s=50, alpha=0.6, figsize=(10, 6)):
+    """
+    Plota um scatter plot de vl_distancia_km vs correlacao com linha de best fit.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame contendo as colunas 'vl_distancia_km' e 'correlacao'
+    s : float, default=50
+        Tamanho dos pontos no scatter plot
+    alpha : float, default=0.6
+        Transparência dos pontos (0=transparente, 1=opaco)
+    figsize : tuple, default=(10, 6)
+        Tamanho da figura (largura, altura)
+    
+    Returns
+    -------
+    tuple
+        (fig, ax): objetos figura e eixo do matplotlib
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    x = df['vl_distancia_km'].values
+    y = df['correlacao'].values
+    
+    mask = ~np.isnan(x) & ~np.isnan(y)
+    x_clean = x[mask]
+    y_clean = y[mask]
+    
+    ax.scatter(x_clean, y_clean, s=s, alpha=alpha, edgecolors='black', linewidth=0.5)
+    
+    slope, intercept, r_value, p_value, std_err = stats.linregress(x_clean, y_clean)
+    
+    x_line = np.array([x_clean.min(), x_clean.max()])
+    y_line = slope * x_line + intercept
+    
+    ax.plot(x_line, y_line, 'r-', linewidth=2, label='Best fit')
+    
+    correlation = np.corrcoef(x_clean, y_clean)[0, 1]
+    
+    ax.set_xlabel('Distância (km)', fontsize=12)
+    ax.set_ylabel('Correlação', fontsize=12)
+    ax.set_title('Relação entre Distância e Correlação', fontsize=14, fontweight='bold')
+    
+    textstr = f'Correlação de Pearson: {correlation:.4f}'
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+    ax.text(0.95, 0.95, textstr, transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', horizontalalignment='right', bbox=props)
+    ax.grid(True, alpha=0.3)
+    
+    sns.despine()
+    
+    plt.tight_layout()
+    plt.show()
+    
+    return fig, ax

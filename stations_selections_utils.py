@@ -477,24 +477,5 @@ def plotar_estacoes_por_id(id_estacao_base, ouro_conn, id_estacoes_vizinhas):
     plt.title('Localização da Estação Base e Vizinhas')
     plt.show()
 
-# estacao 920231 ta com vizinhas mt distantes
-# estacao 920840 ta indicando ela mesma como vizinha
-# > Talvez duplicidade na base?
-# Parametros para possivel escolha 
-# > Usar dado de produto como "estação vizinha"? Ver correlação
-# >> Correlação forte --> Pode ser usado para o solo
-# 
-#
-#
-# BASE: 2025-01-02, *2025-01-01*
-# VIZINHA: *2025-01-01*, 2024-12-31
-# PCT_INTERSECAO = 50%
-#
-#
-# Para a próxima sexta: trazer cenários de conjuntos de parâmetros
-# 
-
-
-
 
 

@@ -299,14 +299,15 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
                 smote_constraint_columns=None, smote_random_state=None,
                 use_bi_model=False, threshold_prioridade=0.5, 
                 percent_datetime_partitioning_split=0.7,
-                truncate_to_non_negative_target=True):
+                truncate_to_non_negative_target=True,
+                classifier_model=None, classifier_thresholds=None):
     """
     Treina modelo(s) de machine learning para previsão de precipitação.
     
     Esta função treina modelos preditivos usando dados de estações meteorológicas,
-    oferecendo duas abordagens: modelo único ou modelo duplo (bi-model). O modelo
-    duplo separa os dados baseado na prioridade das estações vizinhas e treina
-    modelos específicos para cada grupo.
+    oferecendo três abordagens: modelo único, modelo duplo (bi-model) e/ou 
+    modelo híbrido (classificador + regressores por bins). As abordagens podem
+    ser combinadas para máxima flexibilidade.
     
     Parameters
     ----------
@@ -315,8 +316,8 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
         Deve conter as colunas 'id_estacao', 'dt_medicao' e 'vl_precipitacao'.
         
     Model : class
-        Classe do modelo de machine learning a ser utilizado (ex: RandomForestRegressor).
-        Deve implementar os métodos fit() e predict().
+        Classe do modelo de machine learning a ser utilizado para regressão 
+        (ex: RandomForestRegressor). Deve implementar os métodos fit() e predict().
         
     model_number : int or str
         Identificador único do modelo para salvamento dos arquivos.
@@ -371,29 +372,47 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
         
     truncate_to_non_negative_target : bool, optional, default=True
         Se True, trunca predições negativas para 0 (precipitação não pode ser negativa).
+        
+    classifier_model : class, optional, default=None
+        Classe do modelo de classificação para abordagem híbrida (ex: XGBClassifier).
+        Se fornecido, classifier_thresholds também deve ser fornecido.
+        
+    classifier_thresholds : array-like, optional, default=None
+        Array com thresholds para criação dos bins de classificação.
+        Exemplo: [1, 5, 20] cria bins: [0,1), [1,5), [5,20), [20,∞).
+        Deve estar em ordem crescente e todos os valores > 0.
     
     Returns
     -------
     tuple
         Tupla contendo (model, comparison):
         
-        Para modelo único (use_bi_model=False):
+        Para modelo único sem classificador:
         - model : objeto do modelo treinado
         - comparison : pd.DataFrame com comparação entre valores reais e preditos
         
-        Para bi-model (use_bi_model=True):
+        Para modelo único com classificador:
+        - model : dict com chaves 'classifier' e 'regressors' (bins)
+        - comparison : pd.DataFrame com comparação incluindo predições híbridas
+        
+        Para bi-model sem classificador:
         - model : dict com chaves 'com_vizinha' e 'sem_vizinha' contendo os modelos
         - comparison : dict com chaves 'com_vizinha' e 'sem_vizinha' contendo as comparações
+        
+        Para bi-model com classificador:
+        - model : dict aninhado onde cada tipo contém 'classifier' e 'regressors' (bins)
+        - comparison : dict aninhado combinando ambas as estruturas
     
     Raises
     ------
     ValueError
-        Se os parâmetros estiverem fora dos limites válidos ou se colunas
-        obrigatórias estiverem ausentes.
+        Se os parâmetros estiverem fora dos limites válidos, se colunas
+        obrigatórias estiverem ausentes, ou se classifier_model e 
+        classifier_thresholds não forem consistentes.
         
     TypeError
-        Se o Model não implementar os métodos necessários ou se os tipos
-        dos parâmetros não forem os esperados.
+        Se o Model ou classifier_model não implementarem os métodos necessários
+        ou se os tipos dos parâmetros não forem os esperados.
         
     RuntimeError
         Se ocorrer erro durante o treinamento ou salvamento dos modelos.
@@ -404,8 +423,9 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
     Examples
     --------
     >>> from sklearn.ensemble import RandomForestRegressor
+    >>> from xgboost import XGBClassifier
     >>> 
-    >>> # Modelo único com 2 estações vizinhas
+    >>> # Modelo único tradicional
     >>> model, comparison = train_model(
     ...     df_estacoes, 
     ...     RandomForestRegressor, 
@@ -413,39 +433,26 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
     ...     usar_n_estacoes_vizinhas=2
     ... )
     
-    >>> # Balanceamento 50/50 (mesmo número de zeros e não-zeros)
+    >>> # Modelo híbrido (classificador + regressores por bins)
     >>> model, comparison = train_model(
-    ...     df_estacoes, 
-    ...     RandomForestRegressor, 
+    ...     df_estacoes,
+    ...     RandomForestRegressor,
     ...     model_number=2,
     ...     usar_n_estacoes_vizinhas=2,
-    ...     zero_undersampling_ratio=1.0
+    ...     classifier_model=XGBClassifier,
+    ...     classifier_thresholds=[1, 5, 20]  # Bins: [0,1), [1,5), [5,20), [20,∞)
     ... )
     
-    >>> # Bi-model com SMOTE-R (1% de aumento nos casos raros)
+    >>> # Bi-model + híbrido
     >>> model, comparison = train_model(
     ...     df_estacoes,
     ...     RandomForestRegressor,
     ...     model_number=3,
     ...     usar_n_estacoes_vizinhas=3,
     ...     use_bi_model=True,
-    ...     smote_oversampling=True,
-    ...     smote_constraint_columns=['dt_medicao'],
-    ...     zero_undersampling_ratio=0.5,  # metade de zeros em relação aos não-zeros
-    ...     smote_pct_oversampling=0.01,   # 1% de aumento nos casos raros
-    ...     smote_pct_undersampling=0.8,   # 80% de casos comuns em relação aos raros+sintéticos
+    ...     classifier_model=XGBClassifier,
+    ...     classifier_thresholds=[2, 8, 15],  # Bins: [0,2), [2,8), [8,15), [15,∞)
     ...     threshold_prioridade=0.6
-    ... )
-    
-    >>> # Modelo com 50% de aumento nos casos raros
-    >>> model, comparison = train_model(
-    ...     df_estacoes,
-    ...     RandomForestRegressor,
-    ...     model_number=4,
-    ...     usar_n_estacoes_vizinhas=2,
-    ...     smote_oversampling=True,
-    ...     smote_pct_oversampling=0.50,   # 50% de aumento
-    ...     smote_pct_undersampling=2.0    # dobro de casos comuns
     ... )
     
     Notes
@@ -458,243 +465,277 @@ def train_model(abt_estacoes_vizinhas, Model, model_number, usar_n_estacoes_vizi
     - O undersampling é aplicado apenas no conjunto de treino, não afetando o conjunto de teste
     - smote_pct_oversampling agora é uma porcentagem decimal (0.01 = 1% de aumento)
     - smote_pct_undersampling agora é um multiplicador direto (1.0 = mesmo número)
+    - Bins são criados como intervalos: [0, t1), [t1, t2), ..., [tn, ∞)
+    - A predição híbrida usa o classificador para determinar o bin e depois o regressor correspondente
+    - Cada regressor é especializado em seu range específico de precipitação
     """
     
-    try:
-        # Validação de parâmetros
-        if not hasattr(Model, '__call__'):
-            raise TypeError("Model deve ser uma classe instanciável")
+    # Validações básicas
+    if not hasattr(Model, '__call__'):
+        raise TypeError("Model deve ser uma classe instanciável")
+    
+    if not isinstance(usar_n_estacoes_vizinhas, int) or usar_n_estacoes_vizinhas < 0:
+        raise ValueError("usar_n_estacoes_vizinhas deve ser um inteiro >= 0")
+    
+    if zero_undersampling_ratio is not None and zero_undersampling_ratio <= 0:
+        raise ValueError("zero_undersampling_ratio deve ser None ou um número > 0")
+    
+    if not isinstance(smote_pct_oversampling, (int, float)) or smote_pct_oversampling < 0:
+        raise ValueError("smote_pct_oversampling deve ser um número >= 0 (ex: 0.01 para 1%)")
+    
+    if not isinstance(threshold_prioridade, (int, float)) or not (0 <= threshold_prioridade <= 1):
+        raise ValueError("threshold_prioridade deve ser um número entre 0 e 1")
+    
+    # Validações do classificador - CORRIGIDAS
+    if (classifier_model is None) != (classifier_thresholds is None):
+        raise ValueError("classifier_model e classifier_thresholds devem ser fornecidos juntos ou ambos None")
+    
+    if classifier_model is not None:
+        if not hasattr(classifier_model, '__call__'):
+            raise TypeError("classifier_model deve ser uma classe instanciável")
         
-        if not isinstance(usar_n_estacoes_vizinhas, int) or usar_n_estacoes_vizinhas < 0:
-            raise ValueError("usar_n_estacoes_vizinhas deve ser um inteiro >= 0")
+        if not isinstance(classifier_thresholds, (list, tuple, np.ndarray)):
+            raise TypeError("classifier_thresholds deve ser array-like")
         
-        if zero_undersampling_ratio is not None:
-            if not isinstance(zero_undersampling_ratio, (int, float)) or zero_undersampling_ratio <= 0:
-                raise ValueError("zero_undersampling_ratio deve ser None ou um número > 0")
+        classifier_thresholds = np.array(classifier_thresholds)
         
-        # MUDANÇA: Validação para smote_pct_oversampling como decimal
-        if not isinstance(smote_pct_oversampling, (int, float)) or smote_pct_oversampling < 0:
-            raise ValueError("smote_pct_oversampling deve ser um número >= 0 (ex: 0.01 para 1%)")
+        if len(classifier_thresholds) < 1:
+            raise ValueError("classifier_thresholds deve ter pelo menos 1 elemento")
         
-        if smote_pct_oversampling > 10.0:
-            print(f"⚠️  Aviso: smote_pct_oversampling muito alto ({smote_pct_oversampling*100:.1f}%). Considere usar valores menores.")
+        if np.any(classifier_thresholds <= 0):
+            raise ValueError("Todos os thresholds devem ser > 0")
         
-        # MUDANÇA: Validação para smote_pct_undersampling como multiplicador
-        if not isinstance(smote_pct_undersampling, (int, float)) or smote_pct_undersampling < 0:
-            raise ValueError("smote_pct_undersampling deve ser um número >= 0")
+        if not np.all(classifier_thresholds[:-1] < classifier_thresholds[1:]):
+            raise ValueError("classifier_thresholds deve estar em ordem crescente")
+    
+    if abt_estacoes_vizinhas.empty:
+        raise ValueError("DataFrame de entrada não pode estar vazio")
+    
+    required_columns = ['id_estacao', 'dt_medicao', 'vl_precipitacao']
+    missing_cols = [col for col in required_columns if col not in abt_estacoes_vizinhas.columns]
+    if missing_cols:
+        raise KeyError(f"Colunas obrigatórias não encontradas: {missing_cols}")
+    
+    os.makedirs('models', exist_ok=True)
+    os.makedirs('comparisons', exist_ok=True)
+    
+    use_classifier = classifier_model is not None
+    model_type = f"{'Bi-model' if use_bi_model else 'Único'}{' + Híbrido' if use_classifier else ''}"
+    
+    print(f"Modelo {model_number} | {Model.__name__} | {usar_n_estacoes_vizinhas} estações | {model_type}")
+    if use_classifier:
+        print(f"  Classificador: {classifier_model.__name__} | Thresholds: {list(classifier_thresholds)}")
+    
+    def _create_target_classes(y_values, thresholds):
+        """Cria classes baseadas nos bins definidos pelos thresholds."""
+        classes = np.zeros(len(y_values), dtype=int)
         
-        if not isinstance(threshold_prioridade, (int, float)) or not (0 <= threshold_prioridade <= 1):
-            raise ValueError("threshold_prioridade deve ser um número entre 0 e 1")
+        # Bin 0: [0, primeiro_threshold)
+        # Bin 1: [primeiro_threshold, segundo_threshold)
+        # ...
+        # Bin n: [ultimo_threshold, ∞)
         
-        if not isinstance(percent_datetime_partitioning_split, (int, float)) or not (0 < percent_datetime_partitioning_split < 1):
-            raise ValueError("percent_datetime_partitioning_split deve ser um número entre 0 e 1")
+        for i, threshold in enumerate(thresholds, 1):
+            classes[y_values >= threshold] = i
         
-        # Verificar DataFrame de entrada
-        if abt_estacoes_vizinhas.empty:
-            raise ValueError("DataFrame de entrada não pode estar vazio")
+        return classes
+    
+    def _train_hybrid_model(X_train, X_test, y_train, y_test, model_prefix=""):
+        """Treina modelo híbrido (classificador + regressores) para um dataset."""
         
-        required_columns = ['id_estacao', 'dt_medicao', 'vl_precipitacao']
-        missing_cols = [col for col in required_columns if col not in abt_estacoes_vizinhas.columns]
-        if missing_cols:
-            raise KeyError(f"Colunas obrigatórias não encontradas: {missing_cols}")
+        # Preparar dados para classificação
+        y_train_classes = _create_target_classes(y_train, classifier_thresholds)
+        y_test_classes = _create_target_classes(y_test, classifier_thresholds)
         
-        # Verificar se diretórios existem
-        os.makedirs('models', exist_ok=True)
-        os.makedirs('comparisons', exist_ok=True)
+        # Remover colunas não-features
+        train_cols_to_drop = [col for col in ['id_estacao', 'dt_medicao'] if col in X_train.columns]
+        test_cols_to_drop = [col for col in ['id_estacao', 'dt_medicao'] if col in X_test.columns]
         
-        print(f"🚀 Iniciando treinamento do modelo {model_number}")
-        print(f"📊 Dados de entrada: {abt_estacoes_vizinhas.shape}")
-        print(f"🏗️  Modelo: {Model.__name__}")
-        print(f"🌐 Estações vizinhas: {usar_n_estacoes_vizinhas}")
-        print(f"🔄 Tipo de modelo: {'Bi-model' if use_bi_model else 'Modelo único'}")
-        if zero_undersampling_ratio is not None:
-            print(f"⚖️  Zero undersampling ratio: {zero_undersampling_ratio} (zeros por não-zero)")
-        if smote_oversampling:
-            print(f"🧬 SMOTE-R: oversampling {smote_pct_oversampling*100:.2f}%, undersampling multiplicador {smote_pct_undersampling}")
+        X_train_features = X_train.drop(train_cols_to_drop, axis=1)
+        X_test_features = X_test.drop(test_cols_to_drop, axis=1)
         
-        if not use_bi_model:
-            print("\n=== TREINAMENTO MODELO ÚNICO ===")
+        # Treinar classificador
+        classifier = classifier_model()
+        classifier.fit(X_train_features, y_train_classes)
+        
+        # Predições do classificador
+        y_pred_classes = classifier.predict(X_test_features)
+        
+        # Treinar regressores para cada bin
+        regressors = {}
+        n_bins = len(classifier_thresholds) + 1
+        
+        for bin_idx in range(n_bins):
+            # Definir limites do bin
+            if bin_idx == 0:
+                # Bin 0: [0, primeiro_threshold)
+                lower_bound = 0
+                upper_bound = classifier_thresholds[0]
+                mask_train = (y_train >= lower_bound) & (y_train < upper_bound)
+                bin_name = f"bin_{bin_idx}"
+                bin_desc = f"[{lower_bound}, {upper_bound})"
+            elif bin_idx == n_bins - 1:
+                # Último bin: [ultimo_threshold, ∞)
+                lower_bound = classifier_thresholds[-1]
+                mask_train = y_train >= lower_bound
+                bin_name = f"bin_{bin_idx}"
+                bin_desc = f"[{lower_bound}, ∞)"
+            else:
+                # Bins intermediários: [threshold_i, threshold_i+1)
+                lower_bound = classifier_thresholds[bin_idx - 1]
+                upper_bound = classifier_thresholds[bin_idx]
+                mask_train = (y_train >= lower_bound) & (y_train < upper_bound)
+                bin_name = f"bin_{bin_idx}"
+                bin_desc = f"[{lower_bound}, {upper_bound})"
             
-            # Gerar dados de treino e teste
-            print("📈 Preparando dados de treino e teste...")
-            try:
-                X_train, X_test, y_train, y_test = generate_X_y_train_test(
-                    abt_estacoes_vizinhas,
-                    usar_n_estacoes_vizinhas=usar_n_estacoes_vizinhas,
-                    zero_undersampling_ratio=zero_undersampling_ratio,
-                    smote_oversampling=smote_oversampling,
-                    smote_threshold=smote_threshold,
-                    smote_pct_oversampling=smote_pct_oversampling,
-                    smote_pct_undersampling=smote_pct_undersampling,
-                    smote_k_neighbors=smote_k_neighbors,
-                    smote_explanatory_variables=smote_explanatory_variables,
-                    smote_constraint_columns=smote_constraint_columns,
-                    smote_relevance_function=None,
-                    percent_datetime_partitioning_split=percent_datetime_partitioning_split,
-                    random_state=smote_random_state
-                )
-            except Exception as e:
-                raise RuntimeError(f"Erro na preparação dos dados: {e}")
+            if np.sum(mask_train) == 0:
+                print(f"  ⚠️  {model_prefix}Bin {bin_idx} {bin_desc}: Nenhum dado de treino disponível")
+                continue
             
-            # Verificar se as colunas necessárias estão presentes para remoção
-            train_cols_to_drop = [col for col in ['id_estacao', 'dt_medicao'] if col in X_train.columns]
-            test_cols_to_drop = [col for col in ['id_estacao', 'dt_medicao'] if col in X_test.columns]
+            X_train_bin = X_train_features[mask_train]
+            y_train_bin = y_train[mask_train]
             
-            if len(train_cols_to_drop) != len(test_cols_to_drop):
-                print("⚠️  Aviso: Colunas de identificação diferentes entre treino e teste")
+            # Treinar regressor para este bin
+            regressor = Model()
+            regressor.fit(X_train_bin, y_train_bin)
+            regressors[bin_name] = regressor
             
-            # Treinar modelo
-            print("🎯 Treinando modelo...")
-            try:
-                model = Model()
-                X_train_features = X_train.drop(train_cols_to_drop, axis=1)
-                print(f"   • Features utilizadas: {X_train_features.shape[1]}")
-                print(f"   • Amostras de treino: {len(y_train)}")
-                
-                model.fit(X_train_features, y_train)
-                print("✅ Treinamento concluído!")
-            except Exception as e:
-                raise RuntimeError(f"Erro durante o treinamento: {e}")
-            
-            # Fazer predições
-            print("🔮 Gerando predições...")
-            try:
-                X_test_features = X_test.drop(test_cols_to_drop, axis=1)
-                y_pred = model.predict(X_test_features)
-                
-                if truncate_to_non_negative_target:
-                    negative_count = np.sum(y_pred < 0)
-                    if negative_count > 0:
-                        print(f"⚖️  Truncando {negative_count} predições negativas para 0")
-                    y_pred = np.clip(y_pred, a_min=0, a_max=None)
-                
-                print(f"📊 Predições geradas: {len(y_pred)}")
-                print(f"   • Valor mín: {np.min(y_pred):.3f}")
-                print(f"   • Valor máx: {np.max(y_pred):.3f}")
-                print(f"   • Média: {np.mean(y_pred):.3f}")
-            except Exception as e:
-                raise RuntimeError(f"Erro na geração de predições: {e}")
-            
-            # Computar comparação
-            print("📋 Computando métricas de comparação...")
-            try:
-                comparison = compute_comparison_df(X_test, y_test, y_pred)
-                print("✅ Comparação concluída!")
-            except Exception as e:
-                raise RuntimeError(f"Erro no cálculo de métricas: {e}")
+            print(f"  ✓ {model_prefix}Bin {bin_idx} {bin_desc}: {np.sum(mask_train)} amostras de treino")
         
-        elif use_bi_model:
-            print(f"\n=== TREINAMENTO BI-MODEL (threshold={threshold_prioridade}) ===")
-            
-            # Inicializar estruturas de dados
-            abt, X_train, X_test, y_train, y_test, model, y_pred, comparison = {}, {}, {}, {}, {}, {}, {}, {}
-            
-            # Separar dados com e sem vizinha
-            print("🔀 Separando dados por prioridade de estações vizinhas...")
-            try:
-                abt['com_vizinha'], abt['sem_vizinha'] = split_com_sem_vizinha(
-                    abt_estacoes_vizinhas, threshold_prioridade
-                )
-                print(f"   • Com vizinha: {len(abt['com_vizinha'])} registros")
-                print(f"   • Sem vizinha: {len(abt['sem_vizinha'])} registros")
-            except Exception as e:
-                raise RuntimeError(f"Erro na separação dos dados: {e}")
-            
-            # Preparar dados para cada tipo
-            print("📈 Preparando dados de treino e teste para cada modelo...")
-            for tipo in tqdm(['com_vizinha', 'sem_vizinha'], desc="Preparando dados"):
-                try:
-                    if len(abt[tipo]) == 0:
-                        print(f"⚠️  Aviso: Dataset '{tipo}' está vazio!")
-                        continue
-                        
-                    X_train[tipo], X_test[tipo], y_train[tipo], y_test[tipo] = generate_X_y_train_test(
-                        abt[tipo],
-                        usar_n_estacoes_vizinhas=usar_n_estacoes_vizinhas,
-                        zero_undersampling_ratio=zero_undersampling_ratio,
-                        smote_oversampling=smote_oversampling,
-                        smote_threshold=smote_threshold,
-                        smote_pct_oversampling=smote_pct_oversampling,
-                        smote_pct_undersampling=smote_pct_undersampling,
-                        smote_k_neighbors=smote_k_neighbors,
-                        smote_constraint_columns=smote_constraint_columns,
-                        smote_relevance_function=None,
-                        smote_explanatory_variables=smote_explanatory_variables,
-                        percent_datetime_partitioning_split=percent_datetime_partitioning_split,
-                        random_state=smote_random_state
-                    )
-                except Exception as e:
-                    raise RuntimeError(f"Erro na preparação dos dados para '{tipo}': {e}")
-            
-            # Treinar modelos
-            print("🎯 Treinando modelos...")
-            model['com_vizinha'], model['sem_vizinha'] = Model(), Model()
-            
-            for tipo in tqdm(['com_vizinha', 'sem_vizinha'], desc="Treinando modelos"):
-                if tipo not in X_train or len(X_train[tipo]) == 0:
-                    print(f"⚠️  Pulando treinamento para '{tipo}' - dados insuficientes")
-                    continue
-                    
-                try:
-                    cols_to_drop = [col for col in ['id_estacao', 'dt_medicao'] if col in X_train[tipo].columns]
-                    X_train_features = X_train[tipo].drop(cols_to_drop, axis=1)
-                    
-                    print(f"   • {tipo}: {X_train_features.shape[1]} features, {len(y_train[tipo])} amostras")
-                    model[tipo].fit(X_train_features, y_train[tipo])
-                except Exception as e:
-                    raise RuntimeError(f"Erro no treinamento do modelo '{tipo}': {e}")
-            
-            print("✅ Treinamento de ambos os modelos concluído!")
-            
-            # Fazer predições e calcular comparações
-            print("🔮 Gerando predições e métricas...")
-            for tipo in tqdm(['com_vizinha', 'sem_vizinha'], desc="Gerando predições"):
-                if tipo not in X_test or len(X_test[tipo]) == 0:
-                    print(f"⚠️  Pulando predições para '{tipo}' - dados insuficientes")
-                    continue
-                    
-                try:
-                    cols_to_drop = [col for col in ['id_estacao', 'dt_medicao'] if col in X_test[tipo].columns]
-                    X_test_features = X_test[tipo].drop(cols_to_drop, axis=1)
-                    
-                    y_pred[tipo] = model[tipo].predict(X_test_features)
-                    
-                    if truncate_to_non_negative_target:
-                        negative_count = np.sum(y_pred[tipo] < 0)
-                        if negative_count > 0:
-                            print(f"⚖️  {tipo}: Truncando {negative_count} predições negativas para 0")
-                        y_pred[tipo] = np.clip(y_pred[tipo], a_min=0, a_max=None)
-                    
-                    comparison[tipo] = compute_comparison_df(X_test[tipo], y_test[tipo], y_pred[tipo])
-                    
-                    print(f"   • {tipo}: {len(y_pred[tipo])} predições (média: {np.mean(y_pred[tipo]):.3f})")
-                except Exception as e:
-                    raise RuntimeError(f"Erro nas predições para '{tipo}': {e}")
+        # Fazer predições híbridas
+        y_pred_hybrid = np.zeros(len(y_test))
         
-        # Salvar modelo e comparação
-        print(f"💾 Salvando modelo e comparação...")
-        try:
-            model_path = f'models/model_{model_number}.pkl'
-            comparison_path = f'comparisons/comparison_{model_number}.pkl'
+        for i, predicted_class in enumerate(y_pred_classes):
+            bin_name = f"bin_{predicted_class}"
             
-            save_model_and_comparison(model, comparison, model_path, comparison_path)
+            if bin_name in regressors:
+                # Fazer predição com o regressor do bin correspondente
+                sample_features = X_test_features.iloc[i:i+1]
+                prediction = regressors[bin_name].predict(sample_features)[0]
+            else:
+                # Fallback para o regressor do bin 0 se disponível
+                if "bin_0" in regressors:
+                    sample_features = X_test_features.iloc[i:i+1]
+                    prediction = regressors["bin_0"].predict(sample_features)[0]
+                else:
+                    # Usar qualquer regressor disponível como último recurso
+                    if regressors:
+                        available_bin = list(regressors.keys())[0]
+                        sample_features = X_test_features.iloc[i:i+1]
+                        prediction = regressors[available_bin].predict(sample_features)[0]
+                    else:
+                        prediction = 0.0
             
-            print(f"✅ Arquivos salvos:")
-            print(f"   • Modelo: {model_path}")
-            print(f"   • Comparação: {comparison_path}")
-        except Exception as e:
-            raise RuntimeError(f"Erro no salvamento: {e}")
+            y_pred_hybrid[i] = prediction
         
-        print(f"\n🎉 Processo concluído com sucesso para modelo {model_number}!")
+        if truncate_to_non_negative_target:
+            y_pred_hybrid = np.clip(y_pred_hybrid, a_min=0, a_max=None)
         
+        # Criar estrutura do modelo híbrido
+        hybrid_model = {
+            'classifier': classifier,
+            'regressors': regressors
+        }
+        
+        # Calcular comparação incluindo informações do classificador
+        comparison = compute_comparison_df(X_test, y_test, y_pred_hybrid)
+        comparison['predicted_class'] = y_pred_classes
+        comparison['actual_class'] = y_test_classes
+        
+        return hybrid_model, comparison
+    
+    def _train_single_model(X_train, X_test, y_train, y_test):
+        """Treina modelo único (regressão tradicional)."""
+        train_cols_to_drop = [col for col in ['id_estacao', 'dt_medicao'] if col in X_train.columns]
+        test_cols_to_drop = [col for col in ['id_estacao', 'dt_medicao'] if col in X_test.columns]
+        
+        model = Model()
+        X_train_features = X_train.drop(train_cols_to_drop, axis=1)
+        model.fit(X_train_features, y_train)
+        
+        X_test_features = X_test.drop(test_cols_to_drop, axis=1)
+        y_pred = model.predict(X_test_features)
+        
+        if truncate_to_non_negative_target:
+            y_pred = np.clip(y_pred, a_min=0, a_max=None)
+        
+        comparison = compute_comparison_df(X_test, y_test, y_pred)
         return model, comparison
     
-    except (ValueError, KeyError, TypeError) as e:
-        print(f"❌ Erro de validação: {e}")
-        raise
-    except RuntimeError as e:
-        print(f"❌ Erro durante execução: {e}")
-        raise
-    except Exception as e:
-        print(f"❌ Erro inesperado: {e}")
-        raise RuntimeError(f"Erro inesperado durante o treinamento: {e}")
+    if not use_bi_model:
+        # Modelo único (com ou sem classificador)
+        X_train, X_test, y_train, y_test = generate_X_y_train_test(
+            abt_estacoes_vizinhas,
+            usar_n_estacoes_vizinhas=usar_n_estacoes_vizinhas,
+            zero_undersampling_ratio=zero_undersampling_ratio,
+            smote_oversampling=smote_oversampling,
+            smote_threshold=smote_threshold,
+            smote_pct_oversampling=smote_pct_oversampling,
+            smote_pct_undersampling=smote_pct_undersampling,
+            smote_k_neighbors=smote_k_neighbors,
+            smote_explanatory_variables=smote_explanatory_variables,
+            smote_constraint_columns=smote_constraint_columns,
+            smote_relevance_function=None,
+            percent_datetime_partitioning_split=percent_datetime_partitioning_split,
+            random_state=smote_random_state
+        )
+        
+        if use_classifier:
+            model, comparison = _train_hybrid_model(X_train, X_test, y_train, y_test)
+        else:
+            model, comparison = _train_single_model(X_train, X_test, y_train, y_test)
+    
+    else:
+        # Bi-model (com ou sem classificador)
+        abt_com_vizinha, abt_sem_vizinha = split_com_sem_vizinha(
+            abt_estacoes_vizinhas, threshold_prioridade
+        )
+        
+        X_train, X_test, y_train, y_test, model, comparison = {}, {}, {}, {}, {}, {}
+        
+        for tipo in tqdm(['com_vizinha', 'sem_vizinha'], desc="Preparando dados"):
+            abt_data = abt_com_vizinha if tipo == 'com_vizinha' else abt_sem_vizinha
+            
+            if len(abt_data) == 0:
+                print(f"  ⚠️  Tipo '{tipo}': Nenhum dado disponível")
+                continue
+                
+            X_train[tipo], X_test[tipo], y_train[tipo], y_test[tipo] = generate_X_y_train_test(
+                abt_data,
+                usar_n_estacoes_vizinhas=usar_n_estacoes_vizinhas,
+                zero_undersampling_ratio=zero_undersampling_ratio,
+                smote_oversampling=smote_oversampling,
+                smote_threshold=smote_threshold,
+                smote_pct_oversampling=smote_pct_oversampling,
+                smote_pct_undersampling=smote_pct_undersampling,
+                smote_k_neighbors=smote_k_neighbors,
+                smote_constraint_columns=smote_constraint_columns,
+                smote_relevance_function=None,
+                smote_explanatory_variables=smote_explanatory_variables,
+                percent_datetime_partitioning_split=percent_datetime_partitioning_split,
+                random_state=smote_random_state
+            )
+        
+        for tipo in tqdm(['com_vizinha', 'sem_vizinha'], desc="Treinando modelos"):
+            if tipo not in X_train or len(X_train[tipo]) == 0:
+                continue
+            
+            model_prefix = f"[{tipo}] "
+            
+            if use_classifier:
+                model[tipo], comparison[tipo] = _train_hybrid_model(
+                    X_train[tipo], X_test[tipo], y_train[tipo], y_test[tipo], model_prefix
+                )
+            else:
+                model[tipo], comparison[tipo] = _train_single_model(
+                    X_train[tipo], X_test[tipo], y_train[tipo], y_test[tipo]
+                )
+    
+    model_path = f'models/model_{model_number}.pkl'
+    comparison_path = f'comparisons/comparison_{model_number}.pkl'
+    
+    save_model_and_comparison(model, comparison, model_path, comparison_path)
+    
+    print(f"✅ Modelo {model_number} salvo")
+    
+    return model, comparison
