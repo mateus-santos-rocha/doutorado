@@ -58,7 +58,7 @@ def plotar_estacoes_mapa(df, markersize=1, markercolor='blue',
     plt.show()
 
 
-def plot_distance_correlation(df, s=50, alpha=0.6, figsize=(10, 6)):
+def plot_distance_correlation(df, title='Relação entre Distância e Correlação', s=50, alpha=0.6, figsize=(10, 6)):
     """
     Plota um scatter plot de vl_distancia_km vs correlacao com linha de best fit.
     
@@ -103,6 +103,63 @@ def plot_distance_correlation(df, s=50, alpha=0.6, figsize=(10, 6)):
     ax.set_title('Relação entre Distância e Correlação', fontsize=14, fontweight='bold')
     
     textstr = f'Correlação de Pearson: {correlation:.4f}'
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
+    ax.text(0.95, 0.95, textstr, transform=ax.transAxes, fontsize=10,
+            verticalalignment='top', horizontalalignment='right', bbox=props)
+    ax.grid(True, alpha=0.3)
+    
+    sns.despine()
+    
+    plt.tight_layout()
+    plt.show()
+    
+    return fig, ax
+
+def plot_distance_correlation_english(df, title='Distance vs Correlation', s=50, alpha=0.6, figsize=(10, 6)):
+    """
+    Plots a scatter plot of distance vs correlation with best fit line.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame containing 'vl_distancia_km' and 'correlacao' columns
+    s : float, default=50
+        Size of scatter plot points
+    alpha : float, default=0.6
+        Transparency of points (0=transparent, 1=opaque)
+    figsize : tuple, default=(10, 6)
+        Figure size (width, height)
+    
+    Returns
+    -------
+    tuple
+        (fig, ax): matplotlib figure and axes objects
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    x = df['vl_distancia_km'].values
+    y = df['correlacao'].values
+    
+    mask = ~np.isnan(x) & ~np.isnan(y)
+    x_clean = x[mask]
+    y_clean = y[mask]
+    
+    ax.scatter(x_clean, y_clean, s=s, alpha=alpha, edgecolors='black', linewidth=0.5)
+    
+    slope, intercept, r_value, p_value, std_err = stats.linregress(x_clean, y_clean)
+    
+    x_line = np.array([x_clean.min(), x_clean.max()])
+    y_line = slope * x_line + intercept
+    
+    ax.plot(x_line, y_line, 'r-', linewidth=2, label='Best fit')
+    
+    correlation = np.corrcoef(x_clean, y_clean)[0, 1]
+    
+    ax.set_xlabel('Distance (km)', fontsize=12)
+    ax.set_ylabel('Correlation', fontsize=12)
+    ax.set_title('Distance vs Correlation', fontsize=14, fontweight='bold')
+    
+    textstr = f'Pearson Correlation: {correlation:.4f}'
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
     ax.text(0.95, 0.95, textstr, transform=ax.transAxes, fontsize=10,
             verticalalignment='top', horizontalalignment='right', bbox=props)
