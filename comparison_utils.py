@@ -8,7 +8,7 @@ from shapely.geometry import Point
 import pandas as pd
 
 
-def plot_model_metrics(metrics_df, metric_names, x_rotation=45):
+def plot_model_metrics(metrics_df, metric_names, metrics_per_row=3, x_rotation=45,xlabel=None):
     """
     Plota gráficos de barras lado a lado comparando métricas entre diferentes modelos.
     Cada barra recebe um rótulo com valor dentro de uma caixa discreta.
@@ -19,15 +19,17 @@ def plot_model_metrics(metrics_df, metric_names, x_rotation=45):
         DataFrame contendo as métricas dos modelos
     metric_names : list
         Lista com os nomes das métricas a serem plotadas
+    metrics_per_row : int, default=3
+        Número de gráficos de métricas a serem plotados por linha
     x_rotation : int or float, default=45
         Ângulo de rotação dos rótulos do eixo x em graus
     """
     num_metrics = len(metric_names)
-    cols = 2
+    cols = metrics_per_row
     rows = math.ceil(num_metrics / cols)
 
     fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
-    axes = axes.flatten()
+    axes = axes.flatten() if num_metrics > 1 else [axes]
 
     for i, metric in enumerate(metric_names):
         if metric not in metrics_df.columns:
@@ -45,7 +47,7 @@ def plot_model_metrics(metrics_df, metric_names, x_rotation=45):
         )
 
         ax.set_title(metric)
-        ax.set_xlabel('Modelo')
+        ax.set_xlabel(xlabel)
         ax.set_ylabel(metric)
         ax.grid(True, which='major', axis='y', linestyle='--', linewidth=0.5)
         ax.set_axisbelow(True)
@@ -283,7 +285,7 @@ def plot_model_prediction_vs_observation(comparison_df, model_number, id_estacao
 
 
 
-def plot_feature_importance(model, top_n=10, figsize=(10, 6), title=None):
+def plot_feature_importance(model, top_n=10, figsize=(10, 6), title=None,xlabel=None,ylabel=None,replace=False):
     """
     Plota as N features mais importantes usando seaborn.
     
@@ -309,7 +311,21 @@ def plot_feature_importance(model, top_n=10, figsize=(10, 6), title=None):
         {'feature': feature, 'importance': importance} 
         for feature, importance in feature_dict.items()
     ])
-    
+
+    if replace:
+        replacements = {
+            'precipitacao': 'precipitation',
+            'estacao_vizinha': 'neighbor_station',
+            'vento': 'wind',
+            'prioridade': 'priority',
+            'correlacao': 'correlation',
+            'medicao_mes': 'measurement_month',
+            'vizinha': 'neighbor',
+            'media': 'mean'
+        }
+        for old, new in replacements.items():
+            df_importance['feature'] = df_importance['feature'].str.replace(old, new)
+
     df_top = df_importance.nlargest(top_n, 'importance')
     
     plt.figure(figsize=figsize)
@@ -325,8 +341,8 @@ def plot_feature_importance(model, top_n=10, figsize=(10, 6), title=None):
         title = f'Top {top_n} Features - Importância do Modelo'
     
     plt.title(title, fontsize=14, fontweight='bold')
-    plt.xlabel('Importância', fontsize=12)
-    plt.ylabel('Features', fontsize=12)
+    plt.xlabel(xlabel, fontsize=12)
+    plt.ylabel(ylabel, fontsize=12)
     
     for i, v in enumerate(df_top['importance']):
         ax.text(v + 0.001, i, f'{v:.3f}', va='center', fontsize=10)
