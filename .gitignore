@@ -14,3 +14,6 @@ abt_estacoes_vizinhas.parquet
 final_abt.parquet
 comparisons
 metricas_por_threshold_de_prioridade_XGBoost.png
+final_db
+metricas_modelo_produtos.png
+predictions
