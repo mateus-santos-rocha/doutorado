@@ -8,7 +8,7 @@ from scipy import stats
 
 def plotar_estacoes_mapa(df, markersize=1, markercolor='blue', 
                          xlim=(-54, -37), ylim=(-25, -16), 
-                         figsize=(10, 10), mostrar_borda=True):
+                         figsize=(10, 10), mostrar_borda=True,show_labels=True):
     """
     Plota um mapa com estações meteorológicas e divisas estaduais.
 
@@ -53,8 +53,9 @@ def plotar_estacoes_mapa(df, markersize=1, markercolor='blue',
     plt.ylim(ylim)
     plt.legend()
     plt.title('Estações Meteorológicas na Região R2')
-    plt.xlabel('Longitude')
-    plt.ylabel('Latitude')
+    if show_labels:
+        plt.xlabel('Longitude')
+        plt.ylabel('Latitude')
     plt.show()
 
 
